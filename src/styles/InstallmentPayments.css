@@ -1,0 +1,33 @@
+.installment-payments-container {
+  background: linear-gradient(135deg, #0f0f1b 0%, #1b1b2f 100%);
+  color: #fff;
+  min-height: 100vh;
+  padding: 24px;
+}
+
+.header-section {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.table-container {
+  background-color: #1e1e2f !important;
+  border-radius: 12px;
+  overflow: hidden;
+  color: #e0e0e0;
+}
+
+.MuiTableCell-root {
+  color: #e0e0e0 !important;
+}
+
+.link {
+  color: #00bfa5;
+  text-decoration: none;
+}
+
+.link:hover {
+  text-decoration: underline;
+}
