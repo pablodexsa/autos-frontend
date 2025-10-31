@@ -1,12 +1,11 @@
-﻿import axios from "axios";
+﻿// src/api/api.ts
+import axios from "axios";
+import { API_URL } from "../config"; // ✅ usa la misma constante global
 
-// ✅ Toma la URL del backend desde el .env de Vite o usa localhost por defecto
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3000/api";
-
-// ✅ Crea una instancia de Axios con configuración base
+// ✅ Crea la instancia principal de Axios
 const api = axios.create({
   baseURL: API_URL,
-  withCredentials: false, // cámbialo a true si después manejás cookies o sesiones
+  withCredentials: false,
 });
 
 // ✅ Interceptor para agregar token JWT si existe
@@ -18,11 +17,11 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// ✅ (opcional) Interceptor de errores para debug
+// ✅ Interceptor de errores (debug)
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    console.error("❌ API Error:", error?.response || error);
+    console.error("❌ API Error:", error?.response?.data || error.message);
     return Promise.reject(error);
   }
 );
