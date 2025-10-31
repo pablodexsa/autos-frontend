@@ -1,7 +1,7 @@
-import { http } from "./http";
+import api from "./api";
 import { Version } from "../types/catalog";
 
 export async function listVersions(modelId?: number): Promise<Version[]> {
-  const { data } = await http.get("/versions", { params: modelId ? { modelId } : {} });
+  const { data } = await api.get("/versions", { params: modelId ? { modelId } : {} });
   return data;
 }

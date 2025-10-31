@@ -25,7 +25,7 @@ import {
   createInstallmentPayment,
   deleteInstallmentPayment,
 } from "../api/installmentPayments";
-import { http } from "../api/http";
+import api from "../api/api";
 import NotificationSnackbar from "../components/NotificationSnackbar";
 import "../styles/Installments.css";
 
@@ -115,7 +115,7 @@ export default function Installments() {
 
   const handleOpenReceipt = async (paymentId: number) => {
     try {
-      const response = await http.get(`/installment-payments/${paymentId}/receipt`, {
+      const response = await api.get(`/installment-payments/${paymentId}/receipt`, {
         responseType: "blob",
       });
       const blob = new Blob([response.data], {

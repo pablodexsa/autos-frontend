@@ -1,7 +1,7 @@
-import { http } from "./http";
+import api from "./api";
 
 // Listar roles (para selects en Usuarios)
 export async function listRoles() {
-  const { data } = await http.get("/roles");
+  const { data } = await api.get("/roles");
   return data;
 }

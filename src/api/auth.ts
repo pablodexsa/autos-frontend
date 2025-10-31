@@ -1,4 +1,4 @@
-import { http } from "./http";
+import api from "./api";
 
 export interface LoginResponse {
   access_token: string;
@@ -11,16 +11,16 @@ export interface LoginResponse {
 }
 
 export async function login(email: string, password: string): Promise<LoginResponse> {
-  const { data } = await http.post<LoginResponse>("/auth/login", { email, password });
+  const { data } = await api.post<LoginResponse>("/auth/login", { email, password });
   return data;
 }
 
 export async function register(name: string, email: string, password: string, roleId: number) {
-  const { data } = await http.post("/auth/register", { name, email, password, roleId });
+  const { data } = await api.post("/auth/register", { name, email, password, roleId });
   return data;
 }
 
 export async function getProfile() {
-  const { data } = await http.get("/auth/profile");
+  const { data } = await api.get("/auth/profile");
   return data;
 }

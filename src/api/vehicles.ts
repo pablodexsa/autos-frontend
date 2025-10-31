@@ -1,4 +1,4 @@
-﻿import { http } from "./http";
+﻿import api from "./api";
 import { Vehicle, VehicleListResponse } from "../types/vehicle";
 import { showSuccess } from "../utils/errorHandler";
 
@@ -21,36 +21,32 @@ export type VehicleQuery = {
 };
 
 export async function listVehicles(params: VehicleQuery): Promise<VehicleListResponse> {
-  // ✅ Garantizamos que page y limit siempre sean números válidos
   const query = {
     ...params,
     page: params.page && !isNaN(Number(params.page)) ? Number(params.page) : 1,
     limit: params.limit && !isNaN(Number(params.limit)) ? Number(params.limit) : 10,
   };
 
-  const { data } = await http.get("/vehicles", { params: query });
+  const { data } = await api.get("/vehicles", { params: query });
   return data;
 }
 
 export async function createVehicle(
   payload: Omit<Vehicle, "id" | "createdAt" | "updatedAt">
 ): Promise<Vehicle> {
-  const { data } = await http.post("/vehicles", payload);
+  const { data } = await api.post("/vehicles", payload);
   showSuccess("✅ Vehículo creado correctamente");
   return data;
 }
 
-export async function updateVehicle(
-  id: number,
-  payload: Partial<Vehicle>
-): Promise<Vehicle> {
-  const { data } = await http.patch(`/vehicles/${id}`, payload);
+export async function updateVehicle(id: number, payload: Partial<Vehicle>): Promise<Vehicle> {
+  const { data } = await api.patch(`/vehicles/${id}`, payload);
   showSuccess("🚗 Vehículo actualizado con éxito");
   return data;
 }
 
 export async function deleteVehicle(id: number): Promise<{ id: number }> {
-  const { data } = await http.delete(`/vehicles/${id}`);
+  const { data } = await api.delete(`/vehicles/${id}`);
   showSuccess("🗑️ Vehículo eliminado correctamente");
   return data;
 }

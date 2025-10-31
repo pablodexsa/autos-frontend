@@ -1,7 +1,7 @@
-import { http } from "./http";
+import api from "./api";
 import { Model } from "../types/catalog";
 
 export async function listModels(brandId?: number): Promise<Model[]> {
-  const { data } = await http.get("/models", { params: brandId ? { brandId } : {} });
+  const { data } = await api.get("/models", { params: brandId ? { brandId } : {} });
   return data;
 }

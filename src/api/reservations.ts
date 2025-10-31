@@ -1,12 +1,12 @@
-import { http } from "./http";
+import api from "./api";
 
 export async function listReservations() {
-  const { data } = await http.get("/reservations");
+  const { data } = await api.get("/reservations");
   return data;
 }
 
 export async function getReservationPdf(id: number) {
-  const { data } = await http.get(`/reservations/${id}/pdf`);
+  const { data } = await api.get(`/reservations/${id}/pdf`);
   return data; // { url }
 }
 
@@ -16,7 +16,7 @@ export async function createReservation(payload: {
   sellerId?: number;
   amount?: number;
 }) {
-  const { data } = await http.post("/reservations", payload);
+  const { data } = await api.post("/reservations", payload);
   return data;
 }
 
@@ -40,13 +40,13 @@ export async function addGuarantor(
   if (files?.dniCopy) form.append("dniCopy", files.dniCopy);
   if (files?.paystub) form.append("paystub", files.paystub);
 
-  const { data } = await http.post(`/reservations/${reservationId}/guarantors`, form, {
+  const { data } = await api.post(`/reservations/${reservationId}/guarantors`, form, {
     headers: { "Content-Type": "multipart/form-data" },
   });
   return data;
 }
 
 export async function updateReservationStatus(id: number, status: "Aceptada" | "Cancelada") {
-  const { data } = await http.patch(`/reservations/${id}/status`, { status });
+  const { data } = await api.patch(`/reservations/${id}/status`, { status });
   return data;
 }
