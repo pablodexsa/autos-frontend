@@ -12,6 +12,8 @@ import { listModels } from "../api/models";
 import { listVersions } from "../api/versions";
 import { Brand, Model, Version } from "../types/catalog";
 import "./Vehicles.css";
+import { API_URL } from "../config";
+
 
 const initialQuery: VehicleQuery = {
   page: 1,
@@ -98,17 +100,24 @@ export default function VehiclesPage() {
     fetchData();
   }, [JSON.stringify(query)]);
 
-  // SSE
-  const esRef = useRef<EventSource | null>(null);
-  useEffect(() => {
-    const base = (import.meta as any).env.VITE_API_BASE_URL || "http://localhost:3000";
-    const es = new EventSource(`${base}/vehicles/stream`);
-    es.onmessage = () => fetchData();
-    es.onerror = () => {};
-    esRef.current = es;
-    return () => es.close();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+// SSE (actualización en tiempo real)
+const esRef = useRef<EventSource | null>(null);
+
+useEffect(() => {
+  // Usamos la misma constante global que en api.ts
+  const es = new EventSource(`${API_URL}/vehicles/stream`, { withCredentials: false });
+
+  es.onmessage = () => fetchData();      // Cuando hay un cambio, recarga datos
+  es.onerror = (err) => {
+    console.warn("❌ Error SSE:", err);
+  };
+
+  esRef.current = es;
+
+  return () => es.close();               // Cierra la conexión al desmontar
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, []);
+
 
   // Helpers
   const setField = (name: keyof VehicleQuery, value: any) =>
