@@ -12,7 +12,7 @@ import {
   Snackbar,
   Alert,
 } from "@mui/material";
-import axios from "axios";
+import api from "../api/api"; // ✅ cliente global
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
@@ -35,14 +35,17 @@ const Budgets = () => {
     installmentValue: "",
   });
 
+  const [alert, setAlert] = useState({
+    open: false,
+    message: "",
+    severity: "success",
+  });
+
   // 🚗 Cargar vehículos disponibles
   useEffect(() => {
-    axios
-      .get("http://localhost:3000/api/vehicles", {
-        params: { status: "available" }, // ✅ Nuevo endpoint con filtro
-      })
+    api
+      .get("/vehicles", { params: { status: "available" } })
       .then((res) => {
-        // compatibilidad con respuesta del backend
         const data = res.data.items || res.data;
         setVehicles(data);
       })
@@ -54,8 +57,8 @@ const Budgets = () => {
 
   // 📊 Cargar cuotas desde installment_setting
   useEffect(() => {
-    axios
-      .get("http://localhost:3000/api/installment-settings")
+    api
+      .get("/installment-settings")
       .then((res) => setInstallments(res.data))
       .catch((err) => console.error("Error cargando cuotas:", err));
   }, []);
@@ -67,10 +70,7 @@ const Budgets = () => {
 
     if (dniValue.length >= 3) {
       try {
-        const res = await axios.get(
-          `http://localhost:3000/api/clients/search/by-dni?dni=${dniValue}`
-        );
-
+        const res = await api.get(`/clients/search/by-dni?dni=${dniValue}`);
         if (res.data && res.data.length > 0) {
           const cliente = res.data[0];
           setForm((prev) => ({
@@ -107,72 +107,56 @@ const Budgets = () => {
     }
   };
 
-// 💳 Cálculo automático del presupuesto (corregido)
-const calculateBudget = () => {
-  if (!selectedVehicle || !form.paymentType) return;
+  // 💳 Cálculo automático del presupuesto (idéntico al tuyo)
+  const calculateBudget = () => {
+    if (!selectedVehicle || !form.paymentType) return;
 
-  const price = Number(selectedVehicle.price) || 0;
-  const nCuotas = Number(form.installments) || 0;
-  const anticipo = Math.max(0, Number(form.downPayment) || 0); // evita negativos
+    const price = Number(selectedVehicle.price) || 0;
+    const nCuotas = Number(form.installments) || 0;
+    const anticipo = Math.max(0, Number(form.downPayment) || 0);
 
-  // plan seleccionado
-  const plan = installments.find(
-    (i) => Number(i.installments) === nCuotas
-  );
+    const plan = installments.find((i) => Number(i.installments) === nCuotas);
+    const increase = plan ? Number(plan.percentage) / 100 : 0;
 
-  // porcentaje del plan (si aplica)
-  const increase = plan ? Number(plan.percentage) / 100 : 0;
+    let finalPrice = price;
+    let installmentValue = 0;
 
-  let finalPrice = price;         // total a pagar
-  let installmentValue = 0;       // valor por cuota
-
-  if (form.paymentType === "contado") {
-    // Contado: sin recargo, sin cuotas
-    finalPrice = price;
-    installmentValue = 0;
-  } else if (form.paymentType === "cuotas") {
-    // Sólo cuotas: recargo sobre el total
-    if (nCuotas > 0 && plan) {
-      const totalConRecargo = price * (1 + increase);
-      finalPrice = totalConRecargo;
-      installmentValue = totalConRecargo / nCuotas;
-    } else {
-      // sin plan/cuotas válido, no calculamos
+    if (form.paymentType === "contado") {
       finalPrice = price;
       installmentValue = 0;
+    } else if (form.paymentType === "cuotas") {
+      if (nCuotas > 0 && plan) {
+        const totalConRecargo = price * (1 + increase);
+        finalPrice = totalConRecargo;
+        installmentValue = totalConRecargo / nCuotas;
+      } else {
+        finalPrice = price;
+        installmentValue = 0;
+      }
+    } else if (form.paymentType === "anticipo_cuotas") {
+      const restante = Math.max(0, price - anticipo);
+
+      if (nCuotas > 0 && plan) {
+        const financiadoConRecargo = restante * (1 + increase);
+        installmentValue = financiadoConRecargo / nCuotas;
+        finalPrice = anticipo + financiadoConRecargo;
+      } else {
+        finalPrice = anticipo + restante;
+        installmentValue = 0;
+      }
     }
-  } else if (form.paymentType === "anticipo_cuotas") {
-    // Anticipo + Cuotas:
-    // 1) Restar anticipo
-    const restante = Math.max(0, price - anticipo);
 
-    if (nCuotas > 0 && plan) {
-      // 2) Aplicar recargo sobre el restante
-      const financiadoConRecargo = restante * (1 + increase);
-      // 3) Dividir en cuotas
-      installmentValue = financiadoConRecargo / nCuotas;
-      // Total a pagar = anticipo + financiado con recargo
-      finalPrice = anticipo + financiadoConRecargo;
-    } else {
-      // si no hay plan válido, el total es anticipo + restante sin recargo
-      finalPrice = anticipo + restante;
-      installmentValue = 0;
-    }
-  }
+    setForm((prev) => ({
+      ...prev,
+      finalPrice: finalPrice.toFixed(2),
+      installmentValue: installmentValue ? installmentValue.toFixed(2) : "",
+    }));
+  };
 
-  setForm((prev) => ({
-    ...prev,
-    finalPrice: finalPrice.toFixed(2),
-    installmentValue: installmentValue ? installmentValue.toFixed(2) : "",
-  }));
-};
-
-// Recalcular cuando cambie el tipo de pago, cuotas, anticipo o el vehículo
-useEffect(() => {
-  calculateBudget();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-}, [form.paymentType, form.installments, form.downPayment, selectedVehicle]);
-
+  useEffect(() => {
+    calculateBudget();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.paymentType, form.installments, form.downPayment, selectedVehicle]);
 
   // 📄 Generar PDF formal
   const generatePDF = () => {
@@ -185,95 +169,73 @@ useEffect(() => {
     doc.text(`Vendedor: Anónimo`, 20, 40);
     doc.text(`Cliente: ${form.clientName} (${form.dni})`, 20, 50);
 
-autoTable(doc, {
-  startY: 60,
-  head: [["Vehículo", "Forma de Pago", "Precio de lista", "Cuotas", "Valor Cuota", "Anticipo"]],
-  body: [
-    [
-      `${selectedVehicle?.brand || ""} ${selectedVehicle?.model || ""} ${selectedVehicle?.versionName || ""} (${selectedVehicle?.plate || "sin patente"})`,
-      form.paymentType,
-      `$${form.price}`,
-      form.installments || "-",
-      form.installmentValue ? `$${form.installmentValue}` : "-",
-      form.downPayment ? `$${form.downPayment}` : "-",
-    ],
-  ],
-});
-
+    autoTable(doc, {
+      startY: 60,
+      head: [["Vehículo", "Forma de Pago", "Precio de lista", "Cuotas", "Valor Cuota", "Anticipo"]],
+      body: [
+        [
+          `${selectedVehicle?.brand || ""} ${selectedVehicle?.model || ""} ${selectedVehicle?.versionName || ""} (${selectedVehicle?.plate || "sin patente"})`,
+          form.paymentType,
+          `$${form.price}`,
+          form.installments || "-",
+          form.installmentValue ? `$${form.installmentValue}` : "-",
+          form.downPayment ? `$${form.downPayment}` : "-",
+        ],
+      ],
+    });
 
     doc.text(
       "Este presupuesto es válido por 3 días hábiles a partir de la fecha de emisión.",
       20,
-      doc.lastAutoTable.finalY + 20
+      (doc as any).lastAutoTable.finalY + 20
     );
     doc.text(
       "De Grazia Automotores - Dirección: Av. Siempre Viva 123 - Tel: (000) 123-4567",
       20,
-      doc.lastAutoTable.finalY + 28
+      (doc as any).lastAutoTable.finalY + 28
     );
 
     doc.save(`Presupuesto-${form.dni}.pdf`);
   };
-  // 💾 NUEVO: Guardar presupuesto con vendedor logueado y generar PDF
-// 💾 NUEVO: Guardar presupuesto con vendedor logueado y generar PDF
 
+  // 💾 Guardar presupuesto
+  const handleSaveBudget = async () => {
+    if (!clientId || !selectedVehicle) {
+      alert("Debe seleccionar un cliente y un vehículo antes de generar el presupuesto.");
+      return;
+    }
 
-const handleSaveBudget = async () => {
-  if (!clientId || !selectedVehicle) {
-    alert("Debe seleccionar un cliente y un vehículo antes de generar el presupuesto.");
-    return;
-  }
+    const user = JSON.parse(localStorage.getItem("user") || "null");
+    const sellerId = user?.id || null;
 
-  const user = JSON.parse(localStorage.getItem("user") || "null");
-  const sellerId = user?.id || null;
+    const payload = {
+      vehicleId: Number(selectedVehicle?.id) || null,
+      clientId: Number(clientId) || null,
+      sellerId: sellerId ? Number(sellerId) : null,
+      paymentType: form.paymentType || null,
+      installments: form.installments ? Number(form.installments) : null,
+      listPrice: selectedVehicle?.price ? Number(selectedVehicle.price) : null,
+      finalPrice: form.finalPrice ? Number(form.finalPrice) : null,
+      installmentValue: form.installmentValue ? Number(form.installmentValue) : null,
+      downPayment: form.downPayment ? Number(form.downPayment) : null,
+    };
 
-  const payload = {
-    vehicleId: Number(selectedVehicle?.id) || null,
-    clientId: Number(clientId) || null,
-    sellerId: sellerId ? Number(sellerId) : null,
-    paymentType: form.paymentType || null,
-    installments: form.installments ? Number(form.installments) : null,
-    listPrice: selectedVehicle?.price ? Number(selectedVehicle.price) : null,
-    finalPrice: form.finalPrice ? Number(form.finalPrice) : null,
-    installmentValue: form.installmentValue ? Number(form.installmentValue) : null,
-    downPayment: form.downPayment ? Number(form.downPayment) : null,
+    console.log("🚀 Enviando payload final a backend:", payload);
+
+    try {
+      const res = await api.post("/budget-reports", payload, {
+        headers: { "Content-Type": "application/json" },
+      });
+
+      console.log("✅ Presupuesto guardado correctamente:", res.data);
+      generatePDF();
+      setPreviewOpen(false);
+      setAlert({ open: true, message: "Presupuesto guardado correctamente.", severity: "success" });
+    } catch (err) {
+      console.error("❌ Error guardando presupuesto:", err);
+      setAlert({ open: true, message: "Error al guardar el presupuesto.", severity: "error" });
+    }
   };
-
-  console.log("🚀 Enviando payload final a backend:", payload);
-
-  try {
-    const res = await axios.post("http://localhost:3000/api/budget-reports", payload, {
-      headers: { "Content-Type": "application/json" },
-    });
-
-    console.log("✅ Presupuesto guardado correctamente:", res.data);
-    generatePDF();
-    setPreviewOpen(false);
-  } catch (err) {
-    console.error("❌ Error guardando presupuesto:", err);
-    alert("Error al guardar el presupuesto en la base de datos.");
-  }
-};
-
-// 👇 añadí estos estados después de los useState() iniciales:
-const [alert, setAlert] = useState({ open: false, message: "", severity: "success" });
-
-// y al final del return(), justo antes de cerrar el </Box> principal:
-<Snackbar
-  open={alert.open}
-  autoHideDuration={4000}
-  onClose={() => setAlert({ ...alert, open: false })}
-  anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
->
-  <Alert
-    onClose={() => setAlert({ ...alert, open: false })}
-    severity={alert.severity as any}
-    sx={{ width: "100%" }}
-  >
-    {alert.message}
-  </Alert>
-</Snackbar>
-
 
   return (
     <Box>
@@ -298,12 +260,11 @@ const [alert, setAlert] = useState({ open: false, message: "", severity: "succes
             fullWidth
             sx={{ input: { color: "#fff" }, label: { color: "#ccc" } }}
           >
-{vehicles.map((v) => (
-  <MenuItem key={v.id} value={v.id}>
-    {v.brand} {v.model} {v.versionName ? v.versionName : ""} ({v.plate || "sin patente"})
-  </MenuItem>
-))}
-
+            {vehicles.map((v) => (
+              <MenuItem key={v.id} value={v.id}>
+                {v.brand} {v.model} {v.versionName ? v.versionName : ""} ({v.plate || "sin patente"})
+              </MenuItem>
+            ))}
           </TextField>
 
           <TextField
@@ -403,30 +364,41 @@ const [alert, setAlert] = useState({ open: false, message: "", severity: "succes
           {form.downPayment && <Typography>Anticipo: ${form.downPayment}</Typography>}
           {form.installmentValue && <Typography>Valor de Cuota: ${form.installmentValue}</Typography>}
 
-<Box textAlign="center" mt={3}>
-  <Button
-    variant="contained"
-    color="primary"
-    sx={{ mr: 2 }}
-    onClick={async () => {
-      await handleSaveBudget(); // 💾 guarda el presupuesto en /api/budget-reports
-      setPreviewOpen(false);    // 🔒 cierra el modal
-    }}
-  >
-    Guardar y Descargar PDF
-  </Button>
+          <Box textAlign="center" mt={3}>
+            <Button
+              variant="contained"
+              color="primary"
+              sx={{ mr: 2 }}
+              onClick={async () => {
+                await handleSaveBudget();
+                setPreviewOpen(false);
+              }}
+            >
+              Guardar y Descargar PDF
+            </Button>
 
-  <Button
-    variant="outlined"
-    color="secondary"
-    onClick={() => setPreviewOpen(false)}
-  >
-    Cerrar
-  </Button>
-</Box>
-
+            <Button variant="outlined" color="secondary" onClick={() => setPreviewOpen(false)}>
+              Cerrar
+            </Button>
+          </Box>
         </DialogContent>
       </Dialog>
+
+      {/* ✅ Snackbar de confirmación */}
+      <Snackbar
+        open={alert.open}
+        autoHideDuration={4000}
+        onClose={() => setAlert({ ...alert, open: false })}
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+      >
+        <Alert
+          onClose={() => setAlert({ ...alert, open: false })}
+          severity={alert.severity as any}
+          sx={{ width: "100%" }}
+        >
+          {alert.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 };

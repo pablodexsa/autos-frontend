@@ -1,5 +1,5 @@
 ﻿import React, { useEffect, useState } from "react";
-import axios from "axios";
+import api from "../api/api"; // ✅ cliente global centralizado
 import { Card, CardContent, Typography, Grid, Box } from "@mui/material";
 import MonetizationOnIcon from "@mui/icons-material/MonetizationOn";
 import ShoppingCartIcon from "@mui/icons-material/ShoppingCart";
@@ -20,29 +20,40 @@ const Dashboard: React.FC = () => {
   const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [sales, setSales] = useState<Sale[]>([]);
 
+  // 🔹 Obtener compras y ventas
   useEffect(() => {
-    axios.get("http://localhost:3000/api/purchases")
-      .then(res => setPurchases(res.data))
-      .catch(err => console.error("Error cargando compras:", err));
+    api
+      .get("/purchases")
+      .then((res) => setPurchases(res.data))
+      .catch((err) => console.error("Error cargando compras:", err));
 
-    axios.get("http://localhost:3000/api/sales")
-      .then(res => setSales(res.data))
-      .catch(err => console.error("Error cargando ventas:", err));
+    api
+      .get("/sales")
+      .then((res) => setSales(res.data))
+      .catch((err) => console.error("Error cargando ventas:", err));
   }, []);
 
-  const totalCompras = purchases.reduce((sum, p) => sum + Number(p.purchasePrice || 0), 0);
-  const totalVentas = sales.reduce((sum, s) => sum + Number(s.salePrice || 0), 0);
+  const totalCompras = purchases.reduce(
+    (sum, p) => sum + Number(p.purchasePrice || 0),
+    0
+  );
+  const totalVentas = sales.reduce(
+    (sum, s) => sum + Number(s.salePrice || 0),
+    0
+  );
   const gananciaNeta = totalVentas - totalCompras;
 
   return (
     <Box sx={{ flexGrow: 1, p: 3 }}>
       <Typography variant="h4" gutterBottom fontWeight="bold">
-        ?? Dashboard
+        📊 Dashboard
       </Typography>
       <Grid container spacing={3}>
         {/* Total Compras */}
         <Grid item xs={12} sm={6} md={3}>
-          <Card sx={{ backgroundColor: "#388e3c", color: "white", borderRadius: 3 }}>
+          <Card
+            sx={{ backgroundColor: "#388e3c", color: "white", borderRadius: 3 }}
+          >
             <CardContent>
               <ShoppingCartIcon sx={{ fontSize: 40 }} />
               <Typography variant="h6">Total Compras</Typography>
@@ -55,7 +66,9 @@ const Dashboard: React.FC = () => {
 
         {/* Total Ventas */}
         <Grid item xs={12} sm={6} md={3}>
-          <Card sx={{ backgroundColor: "#1976d2", color: "white", borderRadius: 3 }}>
+          <Card
+            sx={{ backgroundColor: "#1976d2", color: "white", borderRadius: 3 }}
+          >
             <CardContent>
               <MonetizationOnIcon sx={{ fontSize: 40 }} />
               <Typography variant="h6">Total Ventas</Typography>
@@ -68,7 +81,13 @@ const Dashboard: React.FC = () => {
 
         {/* Ganancia Neta */}
         <Grid item xs={12} sm={6} md={3}>
-          <Card sx={{ backgroundColor: gananciaNeta >= 0 ? "#2e7d32" : "#d32f2f", color: "white", borderRadius: 3 }}>
+          <Card
+            sx={{
+              backgroundColor: gananciaNeta >= 0 ? "#2e7d32" : "#d32f2f",
+              color: "white",
+              borderRadius: 3,
+            }}
+          >
             <CardContent>
               <TrendingUpIcon sx={{ fontSize: 40 }} />
               <Typography variant="h6">Ganancia Neta</Typography>
@@ -81,7 +100,9 @@ const Dashboard: React.FC = () => {
 
         {/* Cantidad de Operaciones */}
         <Grid item xs={12} sm={6} md={3}>
-          <Card sx={{ backgroundColor: "#f57c00", color: "white", borderRadius: 3 }}>
+          <Card
+            sx={{ backgroundColor: "#f57c00", color: "white", borderRadius: 3 }}
+          >
             <CardContent>
               <DirectionsCarIcon sx={{ fontSize: 40 }} />
               <Typography variant="h6">Vehículos Operados</Typography>

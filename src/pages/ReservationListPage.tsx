@@ -21,8 +21,9 @@ import PictureAsPdfIcon from "@mui/icons-material/PictureAsPdf";
 import EditIcon from "@mui/icons-material/Edit";
 import CancelIcon from "@mui/icons-material/Cancel";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
-import axios from "axios";
 import { useNavigate } from "react-router-dom";
+import api from "../api/api"; // ✅ cliente global
+import { API_URL } from "../config"; // ✅ para enlaces de archivos
 
 interface Guarantor {
   firstName: string;
@@ -58,7 +59,7 @@ const ReservationListPage: React.FC = () => {
   const fetchReservations = async () => {
     setLoading(true);
     try {
-      const res = await axios.get("http://localhost:3000/api/reservations");
+      const res = await api.get("/reservations");
       setReservations(res.data);
     } catch (error) {
       console.error("Error al cargar reservas:", error);
@@ -71,13 +72,12 @@ const ReservationListPage: React.FC = () => {
     fetchReservations();
   }, []);
 
-  // 🔹 Descargar PDF de reserva (abre el diálogo “Guardar como”)
+  // 🔹 Descargar PDF de reserva
   const handleDownloadPDF = async (id: number) => {
     try {
-      const res = await axios.get(
-        `http://localhost:3000/api/reservations/${id}/pdf`,
-        { responseType: "blob" }
-      );
+      const res = await api.get(`/reservations/${id}/pdf`, {
+        responseType: "blob",
+      });
       const blob = new Blob([res.data], { type: "application/pdf" });
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
@@ -94,7 +94,7 @@ const ReservationListPage: React.FC = () => {
   // 🔹 Cambiar estado (aceptar o cancelar)
   const handleUpdateStatus = async (id: number, status: string) => {
     try {
-      await axios.patch(`http://localhost:3000/api/reservations/${id}`, { status });
+      await api.patch(`/reservations/${id}`, { status });
       fetchReservations();
     } catch {
       alert("Error al actualizar estado de reserva.");
@@ -192,7 +192,9 @@ const ReservationListPage: React.FC = () => {
                       <Button
                         variant="outlined"
                         size="small"
-                        onClick={() => handleOpenGuarantors(r.guarantors || [], r.id)}
+                        onClick={() =>
+                          handleOpenGuarantors(r.guarantors || [], r.id)
+                        }
                       >
                         Ver ({r.guarantors?.length || 0})
                       </Button>
@@ -293,7 +295,7 @@ const ReservationListPage: React.FC = () => {
                   <Typography>
                     📎{" "}
                     <a
-                      href={`http://localhost:3000${g.dniFilePath}`}
+                      href={`${API_URL.replace("/api", "")}${g.dniFilePath}`}
                       target="_blank"
                       rel="noreferrer"
                       style={{ color: "#00BFA5" }}
@@ -306,7 +308,7 @@ const ReservationListPage: React.FC = () => {
                   <Typography>
                     📎{" "}
                     <a
-                      href={`http://localhost:3000${g.payslipFilePath}`}
+                      href={`${API_URL.replace("/api", "")}${g.payslipFilePath}`}
                       target="_blank"
                       rel="noreferrer"
                       style={{ color: "#00BFA5" }}

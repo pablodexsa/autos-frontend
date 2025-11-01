@@ -1,23 +1,49 @@
 ﻿import React, { useEffect, useState } from "react";
-import { Box, Typography, Paper, TextField, Button, MenuItem, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, IconButton } from "@mui/material";
+import {
+  Box,
+  Typography,
+  Paper,
+  TextField,
+  Button,
+  MenuItem,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  IconButton,
+} from "@mui/material";
 import { Download } from "@mui/icons-material";
-import axios from "axios";
+import api from "../api/api"; // ✅ usa tu cliente api centralizado
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
 const BudgetReports = () => {
   const [reports, setReports] = useState<any[]>([]);
-  const [filters, setFilters] = useState({ plate: "", dni: "", seller: "", startDate: "", endDate: "" });
+  const [filters, setFilters] = useState({
+    plate: "",
+    dni: "",
+    seller: "",
+    startDate: "",
+    endDate: "",
+  });
 
+  // 🔹 Obtener reportes filtrados
   const fetchReports = async () => {
-    const res = await axios.get("http://localhost:3000/api/budget-reports", { params: filters });
-    setReports(res.data);
+    try {
+      const res = await api.get("/budget-reports", { params: filters }); // ✅ sin localhost
+      setReports(res.data);
+    } catch (error) {
+      console.error("❌ Error cargando reportes:", error);
+    }
   };
 
   useEffect(() => {
     fetchReports();
   }, []);
 
+  // 🧾 Generar PDF
   const generatePDF = (report: any) => {
     const doc = new jsPDF();
     doc.setFontSize(16);
@@ -43,7 +69,7 @@ const BudgetReports = () => {
       ],
     });
 
-    doc.text("Este presupuesto es válido por 3 días hábiles.", 20, doc.lastAutoTable.finalY + 20);
+    doc.text("Este presupuesto es válido por 3 días hábiles.", 20, (doc as any).lastAutoTable.finalY + 20);
     doc.save(`Presupuesto-${report.id}.pdf`);
   };
 
@@ -55,9 +81,21 @@ const BudgetReports = () => {
 
       <Paper sx={{ p: 2, mb: 3 }}>
         <Box display="flex" gap={2}>
-          <TextField label="Patente" value={filters.plate} onChange={(e) => setFilters({ ...filters, plate: e.target.value })} />
-          <TextField label="DNI" value={filters.dni} onChange={(e) => setFilters({ ...filters, dni: e.target.value })} />
-          <TextField label="Vendedor" value={filters.seller} onChange={(e) => setFilters({ ...filters, seller: e.target.value })} />
+          <TextField
+            label="Patente"
+            value={filters.plate}
+            onChange={(e) => setFilters({ ...filters, plate: e.target.value })}
+          />
+          <TextField
+            label="DNI"
+            value={filters.dni}
+            onChange={(e) => setFilters({ ...filters, dni: e.target.value })}
+          />
+          <TextField
+            label="Vendedor"
+            value={filters.seller}
+            onChange={(e) => setFilters({ ...filters, seller: e.target.value })}
+          />
           <Button variant="contained" onClick={fetchReports}>
             Buscar
           </Button>

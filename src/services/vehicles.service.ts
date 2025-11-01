@@ -1,8 +1,22 @@
-import axios from "axios";
+// src/services/vehicles.service.ts
+import api from "../api/api"; // ajustá la ruta si es distinta
 
-const API_URL = "http://localhost:3001/vehicles";
+export const getVehicles = async () => {
+  const { data } = await api.get("/vehicles");
+  return data;
+};
 
-export const getVehicles = async () => axios.get(API_URL);
-export const createVehicle = async (data: any) => axios.post(API_URL, data);
-export const updateVehicle = async (id: number, data: any) => axios.put(`${API_URL}/${id}`, data);
-export const deleteVehicle = async (id: number) => axios.delete(`${API_URL}/${id}`);
+export const createVehicle = async (data: any) => {
+  const { data: res } = await api.post("/vehicles", data);
+  return res;
+};
+
+export const updateVehicle = async (id: number, data: any) => {
+  const { data: res } = await api.put(`/vehicles/${id}`, data);
+  return res;
+};
+
+export const deleteVehicle = async (id: number) => {
+  const { data: res } = await api.delete(`/vehicles/${id}`);
+  return res;
+};

@@ -1,5 +1,5 @@
 ﻿import React, { useEffect, useState } from "react";
-import axios from "axios";
+import api from "../api/api";
 import { SaleForm } from "../components/SaleForm";
 import { SaleTable } from "../components/SaleTable";
 
@@ -8,30 +8,28 @@ const Sales: React.FC = () => {
   const [vehicles, setVehicles] = useState([]);
 
   // 📦 Cargar todas las ventas existentes
-  const fetchSales = () => {
-    axios
-      .get("http://localhost:3000/api/sales")
-      .then((res) => setSales(res.data))
-      .catch((err) => {
-        console.error("Error cargando ventas:", err);
-        alert("No se pudieron cargar las ventas.");
-      });
+  const fetchSales = async () => {
+    try {
+      const res = await api.get("/sales");
+      setSales(res.data);
+    } catch (err) {
+      console.error("Error cargando ventas:", err);
+      alert("No se pudieron cargar las ventas.");
+    }
   };
 
-  // 🚗 Cargar vehículos disponibles desde el backend (nuevo modelo 'vehicles')
-  const fetchVehicles = () => {
-    axios
-      .get("http://localhost:3000/api/vehicles", {
+  // 🚗 Cargar vehículos disponibles desde el backend
+  const fetchVehicles = async () => {
+    try {
+      const res = await api.get("/vehicles", {
         params: { status: "available", page: 1, limit: 1000 },
-      })
-      .then((res) => {
-        const data = Array.isArray(res.data) ? res.data : res.data.items || [];
-        setVehicles(data);
-      })
-      .catch((err) => {
-        console.error("Error cargando vehículos:", err);
-        alert("No se pudieron cargar los vehículos disponibles.");
       });
+      const data = Array.isArray(res.data) ? res.data : res.data.items || [];
+      setVehicles(data);
+    } catch (err) {
+      console.error("Error cargando vehículos:", err);
+      alert("No se pudieron cargar los vehículos disponibles.");
+    }
   };
 
   // 🧭 Cargar datos iniciales al montar el componente

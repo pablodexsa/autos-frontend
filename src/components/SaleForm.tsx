@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState } from "react";
+﻿﻿import React, { useEffect, useState } from "react";
 import {
   Button,
   Dialog,
@@ -12,7 +12,7 @@ import {
   Paper,
   Box,
 } from "@mui/material";
-import axios from "axios";
+import api from "../api/api"; // ✅ reemplaza axios por api
 
 interface Vehicle {
   id: number;
@@ -51,7 +51,7 @@ const SaleForm: React.FC<SaleFormProps> = ({ onSaleCreated, vehicles }) => {
   const [installments, setInstallments] = useState<number | "">("");
   const [downPayment, setDownPayment] = useState<number | "">("");
   const [clientDni, setClientDni] = useState<string>("");
-  const [clientName, setClientName] = useState<string>(""); // 💡 nuevo campo
+  const [clientName, setClientName] = useState<string>("");
   const [clientId, setClientId] = useState<number | null>(null);
   const [openConfirm, setOpenConfirm] = useState(false);
   const [calculatedInstallment, setCalculatedInstallment] = useState<number>(0);
@@ -59,23 +59,21 @@ const SaleForm: React.FC<SaleFormProps> = ({ onSaleCreated, vehicles }) => {
 
   // 🔹 Cargar planes de cuotas
   useEffect(() => {
-    axios
-      .get("http://localhost:3000/api/installment-settings")
+    api
+      .get("/installment-settings")
       .then((res) => setInstallmentPlans(res.data))
       .catch((err) => console.error("Error cargando cuotas:", err));
   }, []);
 
-  // 🔍 Buscar cliente por DNI y autocompletar nombre
+  // 🔍 Buscar cliente por DNI
   const handleClientSearch = async (dni: string) => {
     if (dni.length >= 6) {
       try {
-        const res = await axios.get(
-          `http://localhost:3000/api/clients/search/by-dni?dni=${dni}`
-        );
+        const res = await api.get(`/clients/search/by-dni?dni=${dni}`);
         if (res.data && res.data.length > 0) {
           const client: Client = res.data[0];
           setClientId(client.id);
-          setClientName(`${client.firstName} ${client.lastName}`); // ✅ autocompleta nombre
+          setClientName(`${client.firstName} ${client.lastName}`);
         } else {
           setClientId(null);
           setClientName("");
@@ -152,7 +150,7 @@ const SaleForm: React.FC<SaleFormProps> = ({ onSaleCreated, vehicles }) => {
     console.log("🚀 Enviando venta al backend:", payload);
 
     try {
-      await axios.post("http://localhost:3000/api/sales", payload);
+      await api.post("/sales", payload);
       alert("✅ Venta registrada correctamente.");
       onSaleCreated();
 
@@ -299,7 +297,6 @@ const SaleForm: React.FC<SaleFormProps> = ({ onSaleCreated, vehicles }) => {
         </Box>
       </Paper>
 
-      {/* Modal */}
       <Dialog open={openConfirm} onClose={() => setOpenConfirm(false)}>
         <DialogTitle>Confirmar Venta</DialogTitle>
         <DialogContent>

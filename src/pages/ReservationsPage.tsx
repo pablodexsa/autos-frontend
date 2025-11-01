@@ -17,8 +17,9 @@ import {
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import DeleteIcon from "@mui/icons-material/Delete";
-import axios from "axios";
 import { useNavigate, useParams } from "react-router-dom";
+import api from "../api/api";
+import { API_URL } from "../config";
 
 interface Guarantor {
   firstName: string;
@@ -59,10 +60,8 @@ const ReservationsPage: React.FC = () => {
   useEffect(() => {
     const fetchVehicles = async () => {
       try {
-        const endpoint = id
-          ? "http://localhost:3000/api/vehicles"
-          : "http://localhost:3000/api/vehicles?status=available";
-        const res = await axios.get(endpoint);
+        const endpoint = id ? "/vehicles" : "/vehicles?status=available";
+        const res = await api.get(endpoint);
         const data = res.data.items || res.data;
         setVehicles(data);
       } catch {
@@ -76,9 +75,7 @@ const ReservationsPage: React.FC = () => {
   const handleFetchClient = async (dniValue: string) => {
     if (!dniValue || dniValue.length < 3) return;
     try {
-      const res = await axios.get(
-        `http://localhost:3000/api/clients/search/by-dni?dni=${dniValue}`
-      );
+      const res = await api.get("/clients/search/by-dni", { params: { dni: dniValue } });
       if (res.data && res.data.length > 0) {
         setClient(res.data[0]);
       } else {
@@ -96,7 +93,7 @@ const ReservationsPage: React.FC = () => {
     const loadReservation = async () => {
       if (!id) return;
       try {
-        const res = await axios.get(`http://localhost:3000/api/reservations/${id}`);
+        const res = await api.get(`/reservations/${id}`);
         const r = res.data;
 
         setReservationNumber(r.id);
@@ -159,11 +156,7 @@ const ReservationsPage: React.FC = () => {
   // 📄 Generar PDF
   const generatePDF = async (reservationId: string | number) => {
     try {
-      const res = await axios.get(
-        `http://localhost:3000/api/reservations/${reservationId}/pdf`,
-        { responseType: "blob" }
-      );
-
+      const res = await api.get(`/reservations/${reservationId}/pdf`, { responseType: "blob" });
       const file = new Blob([res.data], { type: "application/pdf" });
       const url = window.URL.createObjectURL(file);
 
@@ -191,13 +184,13 @@ const ReservationsPage: React.FC = () => {
       let reservationId = id;
 
       if (id) {
-        await axios.patch(`http://localhost:3000/api/reservations/${id}`, {
+        await api.patch(`/reservations/${id}`, {
           clientDni: client.dni,
           plate: vehicle.plate,
           amount,
         });
 
-        // 🔸 Subir nuevos archivos si fueron reemplazados
+        // 🔸 Subir nuevos archivos
         for (const g of guarantors) {
           if (g.dniFile || g.payslipFile) {
             const formData = new FormData();
@@ -209,18 +202,16 @@ const ReservationsPage: React.FC = () => {
             if (g.dniFile) formData.append("dniFile", g.dniFile);
             if (g.payslipFile) formData.append("payslipFile", g.payslipFile);
 
-            await axios.post(
-              `http://localhost:3000/api/reservations/${id}/guarantors`,
-              formData,
-              { headers: { "Content-Type": "multipart/form-data" } }
-            );
+            await api.post(`/reservations/${id}/guarantors`, formData, {
+              headers: { "Content-Type": "multipart/form-data" },
+            });
           }
         }
 
         alert("✅ Reserva actualizada correctamente.");
         await generatePDF(id);
       } else {
-        const res = await axios.post("http://localhost:3000/api/reservations", {
+        const res = await api.post("/reservations", {
           clientDni: client.dni,
           plate: vehicle.plate,
           amount,
@@ -241,11 +232,9 @@ const ReservationsPage: React.FC = () => {
           if (g.dniFile) formData.append("dniFile", g.dniFile);
           if (g.payslipFile) formData.append("payslipFile", g.payslipFile);
 
-          await axios.post(
-            `http://localhost:3000/api/reservations/${reservationId}/guarantors`,
-            formData,
-            { headers: { "Content-Type": "multipart/form-data" } }
-          );
+          await api.post(`/reservations/${reservationId}/guarantors`, formData, {
+            headers: { "Content-Type": "multipart/form-data" },
+          });
         }
 
         await generatePDF(reservationId);
@@ -391,7 +380,7 @@ const ReservationsPage: React.FC = () => {
                   <Typography variant="body2" sx={{ mb: 1 }}>
                     📎{" "}
                     <Link
-                      href={`http://localhost:3000${g.dniFilePath}`}
+                      href={`${API_URL.replace("/api", "")}${g.dniFilePath}`}
                       target="_blank"
                       rel="noreferrer"
                       color="#00BFA5"
@@ -417,7 +406,7 @@ const ReservationsPage: React.FC = () => {
                   <Typography variant="body2" sx={{ mb: 1 }}>
                     📎{" "}
                     <Link
-                      href={`http://localhost:3000${g.payslipFilePath}`}
+                      href={`${API_URL.replace("/api", "")}${g.payslipFilePath}`}
                       target="_blank"
                       rel="noreferrer"
                       color="#00BFA5"
@@ -450,22 +439,12 @@ const ReservationsPage: React.FC = () => {
           </Paper>
         ))}
 
-        <Button
-          startIcon={<AddIcon />}
-          variant="outlined"
-          color="secondary"
-          onClick={handleAddGuarantor}
-        >
+        <Button startIcon={<AddIcon />} variant="outlined" color="secondary" onClick={handleAddGuarantor}>
           Agregar garante
         </Button>
 
         <Box textAlign="right" mt={4}>
-          <Button
-            variant="contained"
-            color="primary"
-            disabled={loading}
-            onClick={handleSubmit}
-          >
+          <Button variant="contained" color="primary" disabled={loading} onClick={handleSubmit}>
             {loading ? "Guardando..." : id ? "Actualizar Reserva" : "Guardar Reserva"}
           </Button>
         </Box>

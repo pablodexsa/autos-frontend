@@ -12,7 +12,7 @@ import {
   TableCell,
   TableBody,
 } from "@mui/material";
-import axios from "axios";
+import api from "../api/api"; // ✅ cliente centralizado
 
 interface Client {
   id: number;
@@ -36,9 +36,10 @@ const Clients: React.FC = () => {
   });
   const [editingId, setEditingId] = useState<number | null>(null);
 
+  // 🔹 Obtener todos los clientes
   const fetchClients = () => {
-    axios
-      .get("http://localhost:3000/api/clients")
+    api
+      .get("/clients")
       .then((res) => setClients(res.data))
       .catch((err) => console.error("Error cargando clientes:", err));
   };
@@ -47,6 +48,7 @@ const Clients: React.FC = () => {
     fetchClients();
   }, []);
 
+  // 💾 Crear o editar cliente
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -57,13 +59,11 @@ const Clients: React.FC = () => {
 
     try {
       if (editingId) {
-        await axios.put(
-          `http://localhost:3000/api/clients/${editingId}`,
-          form,
-          { headers: { "Content-Type": "application/json" } }
-        );
+        await api.put(`/clients/${editingId}`, form, {
+          headers: { "Content-Type": "application/json" },
+        });
       } else {
-        await axios.post("http://localhost:3000/api/clients", form, {
+        await api.post("/clients", form, {
           headers: { "Content-Type": "application/json" },
         });
       }
@@ -84,6 +84,7 @@ const Clients: React.FC = () => {
     }
   };
 
+  // ✏️ Editar cliente
   const handleEdit = (client: Client) => {
     setForm(client);
     setEditingId(client.id);
