@@ -2,6 +2,7 @@
 import { useAuth } from "../context/AuthContext";
 import { login as apiLogin } from "../api/auth";
 import "./Login.css";
+import logo from "../assets/logo.jpeg"; // Importando el logo
 
 export default function Login() {
   const { login } = useAuth();
@@ -32,6 +33,12 @@ export default function Login() {
 
   return (
     <div className="login-container">
+      {/* Logo en la parte superior izquierda */}
+      <div className="logo-container">
+        <img src={logo} alt="De Grazia Automotores" className="login-logo" />
+        <span className="login-title">De Grazia Automotores</span>
+      </div>
+
       <form className="login-form" onSubmit={handleSubmit}>
         <h2>Iniciar sesión</h2>
 

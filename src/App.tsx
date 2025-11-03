@@ -25,7 +25,6 @@ import BudgetReports from "./pages/BudgetReports";
 import ReservationsPage from "./pages/ReservationsPage";
 import ReservationListPage from "./pages/ReservationListPage";
 
-
 /**
  * Layout principal del sistema
  * Renderiza el Header y Sidebar solo si no estamos en /login
@@ -90,9 +89,23 @@ const App = () => {
                       </ProtectedRoute>
                     }
                   />
-                  <Route path="/reservations" element={<ReservationsPage />} />
-		  <Route path="/reservation-list" element={<ReservationListPage />} />
-		  <Route path="/reservations/edit/:id" element={<ReservationsPage />} />			    <Route
+                  <Route
+                    path="/reservations"
+                    element={
+                      <ProtectedRoute>
+                        <ReservationsPage />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/reservation-list"
+                    element={
+                      <ProtectedRoute>
+                        <ReservationListPage />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
                     path="/sales"
                     element={
                       <ProtectedRoute>
@@ -140,7 +153,14 @@ const App = () => {
                       </ProtectedRoute>
                     }
                   />
-		  <Route path="/budget-reports" element={<BudgetReports />} /> {/* 👈 agregada */}
+                  <Route
+                    path="/budget-reports"
+                    element={
+                      <ProtectedRoute>
+                        <BudgetReports />
+                      </ProtectedRoute>
+                    }
+                  />
                   <Route
                     path="/users"
                     element={
@@ -149,40 +169,42 @@ const App = () => {
                       </ProtectedRoute>
                     }
                   />
-                  {/* Página de inicio */}
+                  {/* Página de inicio protegida */}
                   <Route
                     path="/"
                     element={
-                      <Box
-                        sx={{
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          height: "80vh",
-                          color: "#E0E0E0",
-                          flexDirection: "column",
-                          textAlign: "center",
-                        }}
-                      >
+                      <ProtectedRoute>
                         <Box
-                          component="img"
-                          src={logo}
-                          alt="De Grazia Automotores"
                           sx={{
-                            width: 200,
-                            mb: 3,
-                            borderRadius: 2,
-                            animation: "shine 3s infinite linear",
-                            "@keyframes shine": {
-                              "0%": { filter: "brightness(1)" },
-                              "50%": { filter: "brightness(1.8)" },
-                              "100%": { filter: "brightness(1)" },
-                            },
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            height: "80vh",
+                            color: "#E0E0E0",
+                            flexDirection: "column",
+                            textAlign: "center",
                           }}
-                        />
-                        <h1>Bienvenido a De Grazia Automotores</h1>
-                        <p>Gestione sus ventas, clientes y presupuestos fácilmente.</p>
-                      </Box>
+                        >
+                          <Box
+                            component="img"
+                            src={logo}
+                            alt="De Grazia Automotores"
+                            sx={{
+                              width: 200,
+                              mb: 3,
+                              borderRadius: 2,
+                              animation: "shine 3s infinite linear",
+                              "@keyframes shine": {
+                                "0%": { filter: "brightness(1)" },
+                                "50%": { filter: "brightness(1.8)" },
+                                "100%": { filter: "brightness(1)" },
+                              },
+                            }}
+                          />
+                          <h1>Bienvenido a De Grazia Automotores</h1>
+                          <p>Gestione sus ventas, clientes y presupuestos fácilmente.</p>
+                        </Box>
+                      </ProtectedRoute>
                     }
                   />
                 </Routes>

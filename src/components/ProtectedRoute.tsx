@@ -16,10 +16,12 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, roles }) => {
     return null; // o un loader si querés
   }
 
+  // Redirige al login si el usuario no está autenticado
   if (!isAuthenticated) {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
+  // Si existen roles definidos, verifica que el usuario tenga el rol adecuado
   if (roles && user && !roles.includes(user.role)) {
     return (
       <div
@@ -39,6 +41,7 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, roles }) => {
     );
   }
 
+  // Si todo está bien, muestra el contenido protegido
   return <>{children}</>;
 };
 
