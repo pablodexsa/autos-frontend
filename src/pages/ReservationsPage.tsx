@@ -79,11 +79,9 @@ const ReservationsPage: React.FC = () => {
       if (res.data && res.data.length > 0) {
         setClient(res.data[0]);
       } else {
-        alert("⚠️ Cliente no encontrado. Serás redirigido al módulo de clientes.");
         navigate(`/clients?dni=${dniValue}`);
       }
     } catch {
-      alert("⚠️ Cliente no encontrado. Serás redirigido al módulo de clientes.");
       navigate(`/clients?dni=${dniValue}`);
     }
   };
@@ -102,7 +100,6 @@ const ReservationsPage: React.FC = () => {
         setVehicle(r.vehicle);
         setAmount(Number(r.amount) || 500000);
 
-        // 🔸 Cargar garantes existentes
         if (r.guarantors?.length > 0) {
           const mapped = r.guarantors.map((g: any) => ({
             firstName: g.firstName,
@@ -119,7 +116,6 @@ const ReservationsPage: React.FC = () => {
         }
       } catch (err) {
         console.error("Error cargando reserva:", err);
-        alert("❌ No se pudo cargar la reserva.");
       }
     };
     loadReservation();
@@ -153,31 +149,37 @@ const ReservationsPage: React.FC = () => {
     setGuarantors(updated);
   };
 
-  // 📄 Generar PDF
-  const generatePDF = async (reservationId: string | number) => {
+  // 📄 Descargar PDF con nombre real desde el backend
+  const downloadRealPDF = async (reservationId: string | number) => {
     try {
       const res = await api.get(`/reservations/${reservationId}/pdf`, { responseType: "blob" });
-      const file = new Blob([res.data], { type: "application/pdf" });
-      const url = window.URL.createObjectURL(file);
+      const blob = new Blob([res.data], { type: "application/pdf" });
+      const url = window.URL.createObjectURL(blob);
 
+      // Extraer nombre real desde el header Content-Disposition
+      const disposition = res.headers["content-disposition"];
+      let fileName = `Reserva-${reservationId}.pdf`;
+      if (disposition && disposition.includes("filename=")) {
+        const match = disposition.match(/filename="?([^"]+)"?/);
+        if (match && match[1]) fileName = decodeURIComponent(match[1]);
+      }
+
+      // Descarga automática
       const link = document.createElement("a");
       link.href = url;
-      link.download = `reserva_${reservationId}.pdf`;
+      link.download = fileName;
       document.body.appendChild(link);
       link.click();
-      document.body.removeChild(link);
-
-      window.open(url, "_blank");
+      link.remove();
+      window.URL.revokeObjectURL(url);
     } catch (error) {
-      console.error("Error generando PDF:", error);
-      alert("❌ No se pudo generar el PDF.");
+      console.error("❌ Error descargando PDF:", error);
     }
   };
 
-  // 💾 Guardar / actualizar reserva
+  // 💾 Guardar o actualizar reserva (sin alertas)
   const handleSubmit = async () => {
-    if (!client || !vehicle)
-      return alert("⚠️ Debes completar cliente y vehículo primero.");
+    if (!client || !vehicle) return alert("⚠️ Debes completar cliente y vehículo primero.");
 
     try {
       setLoading(true);
@@ -190,7 +192,6 @@ const ReservationsPage: React.FC = () => {
           amount,
         });
 
-        // 🔸 Subir nuevos archivos
         for (const g of guarantors) {
           if (g.dniFile || g.payslipFile) {
             const formData = new FormData();
@@ -201,15 +202,13 @@ const ReservationsPage: React.FC = () => {
             if (g.phone) formData.append("phone", g.phone);
             if (g.dniFile) formData.append("dniFile", g.dniFile);
             if (g.payslipFile) formData.append("payslipFile", g.payslipFile);
-
             await api.post(`/reservations/${id}/guarantors`, formData, {
               headers: { "Content-Type": "multipart/form-data" },
             });
           }
         }
 
-        alert("✅ Reserva actualizada correctamente.");
-        await generatePDF(id);
+        await downloadRealPDF(id);
       } else {
         const res = await api.post("/reservations", {
           clientDni: client.dni,
@@ -219,9 +218,8 @@ const ReservationsPage: React.FC = () => {
         });
 
         reservationId = res.data.id;
-        alert("✅ Reserva creada correctamente.");
 
-        // Subir garantes
+        // Subir garantes (si los hay)
         for (const g of guarantors) {
           const formData = new FormData();
           formData.append("firstName", g.firstName);
@@ -231,13 +229,13 @@ const ReservationsPage: React.FC = () => {
           if (g.phone) formData.append("phone", g.phone);
           if (g.dniFile) formData.append("dniFile", g.dniFile);
           if (g.payslipFile) formData.append("payslipFile", g.payslipFile);
-
           await api.post(`/reservations/${reservationId}/guarantors`, formData, {
             headers: { "Content-Type": "multipart/form-data" },
           });
         }
 
-        await generatePDF(reservationId);
+        // 🔸 Descargar PDF real con nombre correcto
+        await downloadRealPDF(reservationId);
       }
 
       navigate("/reservation-list");

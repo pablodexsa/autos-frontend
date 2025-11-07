@@ -16,14 +16,17 @@ import {
   Dialog,
   DialogTitle,
   DialogContent,
+  Snackbar,
+  Alert,
 } from "@mui/material";
 import PictureAsPdfIcon from "@mui/icons-material/PictureAsPdf";
 import EditIcon from "@mui/icons-material/Edit";
 import CancelIcon from "@mui/icons-material/Cancel";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
+import RefreshIcon from "@mui/icons-material/Refresh";
 import { useNavigate } from "react-router-dom";
-import api from "../api/api"; // ✅ cliente global
-import { API_URL } from "../config"; // ✅ para enlaces de archivos
+import api from "../api/api";
+import { API_URL } from "../config";
 
 interface Guarantor {
   firstName: string;
@@ -52,6 +55,11 @@ const ReservationListPage: React.FC = () => {
   const [openGuarantors, setOpenGuarantors] = useState(false);
   const [selectedGuarantors, setSelectedGuarantors] = useState<Guarantor[]>([]);
   const [selectedReservationId, setSelectedReservationId] = useState<number | null>(null);
+  const [alert, setAlert] = useState<{ open: boolean; msg: string; type: "success" | "error" }>({
+    open: false,
+    msg: "",
+    type: "success",
+  });
 
   const navigate = useNavigate();
 
@@ -75,18 +83,32 @@ const ReservationListPage: React.FC = () => {
   // 🔹 Descargar PDF de reserva
   const handleDownloadPDF = async (id: number) => {
     try {
+      const reservation = reservations.find((r) => r.id === id);
+      const lastName = reservation?.clientName?.split(" ").pop() || "Cliente";
+      const today = new Date();
+      const dateString = today.toISOString().split("T")[0];
+      const fileName = `Reserva-${lastName}-${dateString}-${id}.pdf`;
+
       const res = await api.get(`/reservations/${id}/pdf`, {
         responseType: "blob",
       });
+
       const blob = new Blob([res.data], { type: "application/pdf" });
       const url = window.URL.createObjectURL(blob);
+
       const link = document.createElement("a");
       link.href = url;
-      link.download = `reserva_${id}.pdf`;
+      link.download = fileName;
       document.body.appendChild(link);
       link.click();
-      document.body.removeChild(link);
-    } catch {
+      link.remove();
+
+      window.open(url, "_blank");
+      window.URL.revokeObjectURL(url);
+
+      console.log(`✅ Reserva descargada como ${fileName}`);
+    } catch (err) {
+      console.error("❌ Error al descargar el PDF de la reserva:", err);
       alert("Error al descargar el PDF de la reserva.");
     }
   };
@@ -119,11 +141,47 @@ const ReservationListPage: React.FC = () => {
     setSelectedReservationId(null);
   };
 
+  // 🔹 Forzar expiración de reservas
+  const handleForceExpire = async () => {
+    try {
+      setLoading(true);
+      await api.post("/reservations/expire");
+      setAlert({
+        open: true,
+        msg: "Reservas vencidas actualizadas correctamente.",
+        type: "success",
+      });
+      await fetchReservations();
+    } catch (error) {
+      console.error("Error al actualizar vencidas:", error);
+      setAlert({
+        open: true,
+        msg: "Error al actualizar vencidas.",
+        type: "error",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <Box sx={{ p: 3 }}>
-      <Typography variant="h4" sx={{ mb: 3, color: "#fff" }}>
-        Listado de Reservas
-      </Typography>
+      {/* Encabezado con botón Actualizar vencidas */}
+      <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
+        <Typography variant="h4" sx={{ color: "#fff" }}>
+          Listado de Reservas
+        </Typography>
+
+        <Button
+          variant="outlined"
+          color="secondary"
+          startIcon={<RefreshIcon />}
+          onClick={handleForceExpire}
+          disabled={loading}
+        >
+          {loading ? <CircularProgress size={20} /> : "Actualizar vencidas"}
+        </Button>
+      </Box>
 
       {loading ? (
         <Box sx={{ textAlign: "center", mt: 5 }}>
@@ -172,9 +230,7 @@ const ReservationListPage: React.FC = () => {
                     <TableCell>{r.clientDni}</TableCell>
                     <TableCell>{r.plate}</TableCell>
                     <TableCell>{r.vehicle}</TableCell>
-                    <TableCell>
-                      {new Date(r.date).toLocaleDateString("es-AR")}
-                    </TableCell>
+                    <TableCell>{new Date(r.date).toLocaleDateString("es-AR")}</TableCell>
                     <TableCell
                       sx={{
                         color:
@@ -192,9 +248,7 @@ const ReservationListPage: React.FC = () => {
                       <Button
                         variant="outlined"
                         size="small"
-                        onClick={() =>
-                          handleOpenGuarantors(r.guarantors || [], r.id)
-                        }
+                        onClick={() => handleOpenGuarantors(r.guarantors || [], r.id)}
                       >
                         Ver ({r.guarantors?.length || 0})
                       </Button>
@@ -202,10 +256,7 @@ const ReservationListPage: React.FC = () => {
 
                     <TableCell align="center">
                       <Tooltip title="Descargar PDF">
-                        <IconButton
-                          color="primary"
-                          onClick={() => handleDownloadPDF(r.id)}
-                        >
+                        <IconButton color="primary" onClick={() => handleDownloadPDF(r.id)}>
                           <PictureAsPdfIcon sx={{ color: "#00BFA5" }} />
                         </IconButton>
                       </Tooltip>
@@ -213,16 +264,12 @@ const ReservationListPage: React.FC = () => {
 
                     <TableCell align="center">
                       <Tooltip title="Aceptar Reserva">
-                        <IconButton
-                          onClick={() => handleUpdateStatus(r.id, "Aceptada")}
-                        >
+                        <IconButton onClick={() => handleUpdateStatus(r.id, "Aceptada")}>
                           <CheckCircleIcon sx={{ color: "#4caf50" }} />
                         </IconButton>
                       </Tooltip>
                       <Tooltip title="Cancelar Reserva">
-                        <IconButton
-                          onClick={() => handleUpdateStatus(r.id, "Cancelada")}
-                        >
+                        <IconButton onClick={() => handleUpdateStatus(r.id, "Cancelada")}>
                           <CancelIcon sx={{ color: "#e53935" }} />
                         </IconButton>
                       </Tooltip>
@@ -239,11 +286,7 @@ const ReservationListPage: React.FC = () => {
           </TableContainer>
 
           {reservations.length === 0 && (
-            <Typography
-              variant="body1"
-              align="center"
-              sx={{ mt: 3, color: "#ccc" }}
-            >
+            <Typography variant="body1" align="center" sx={{ mt: 3, color: "#ccc" }}>
               No hay reservas registradas.
             </Typography>
           )}
@@ -251,25 +294,14 @@ const ReservationListPage: React.FC = () => {
       )}
 
       <Box textAlign="center" mt={4}>
-        <Button
-          variant="contained"
-          color="primary"
-          onClick={() => navigate("/reservations")}
-        >
+        <Button variant="contained" color="primary" onClick={() => navigate("/reservations")}>
           Nueva Reserva
         </Button>
       </Box>
 
       {/* 🔹 Modal de Garantes */}
-      <Dialog
-        open={openGuarantors}
-        onClose={handleCloseGuarantors}
-        maxWidth="sm"
-        fullWidth
-      >
-        <DialogTitle>
-          Garantes de la Reserva #{selectedReservationId}
-        </DialogTitle>
+      <Dialog open={openGuarantors} onClose={handleCloseGuarantors} maxWidth="sm" fullWidth>
+        <DialogTitle>Garantes de la Reserva #{selectedReservationId}</DialogTitle>
         <DialogContent>
           {selectedGuarantors.length === 0 ? (
             <Typography>No hay garantes cargados.</Typography>
@@ -327,6 +359,16 @@ const ReservationListPage: React.FC = () => {
           </Button>
         </Box>
       </Dialog>
+
+      {/* 🔔 Snackbar */}
+      <Snackbar
+        open={alert.open}
+        autoHideDuration={3000}
+        onClose={() => setAlert({ ...alert, open: false })}
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+      >
+        <Alert severity={alert.type}>{alert.msg}</Alert>
+      </Snackbar>
     </Box>
   );
 };

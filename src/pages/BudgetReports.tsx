@@ -5,7 +5,6 @@ import {
   Paper,
   TextField,
   Button,
-  MenuItem,
   Table,
   TableBody,
   TableCell,
@@ -15,9 +14,7 @@ import {
   IconButton,
 } from "@mui/material";
 import { Download } from "@mui/icons-material";
-import api from "../api/api"; // ✅ usa tu cliente api centralizado
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
+import api from "../api/api";
 
 const BudgetReports = () => {
   const [reports, setReports] = useState<any[]>([]);
@@ -32,7 +29,7 @@ const BudgetReports = () => {
   // 🔹 Obtener reportes filtrados
   const fetchReports = async () => {
     try {
-      const res = await api.get("/budget-reports", { params: filters }); // ✅ sin localhost
+      const res = await api.get("/budget-reports", { params: filters });
       setReports(res.data);
     } catch (error) {
       console.error("❌ Error cargando reportes:", error);
@@ -41,36 +38,49 @@ const BudgetReports = () => {
 
   useEffect(() => {
     fetchReports();
+
+    // 🧩 Detectar si se creó un nuevo presupuesto
+    const shouldRefresh = localStorage.getItem("refreshBudgetsList");
+    if (shouldRefresh === "true") {
+      localStorage.removeItem("refreshBudgetsList");
+      fetchReports();
+    }
   }, []);
 
-  // 🧾 Generar PDF
-  const generatePDF = (report: any) => {
-    const doc = new jsPDF();
-    doc.setFontSize(16);
-    doc.text("De Grazia Automotores", 20, 20);
-    doc.setFontSize(10);
-    doc.text(`Presupuesto Nº ${report.id}`, 20, 30);
-    doc.text(`Fecha: ${new Date(report.createdAt).toLocaleDateString()}`, 150, 30);
-    doc.text(`Vendedor: ${report.seller?.name || "Anónimo"}`, 20, 40);
-    doc.text(`Cliente: ${report.client.firstName} ${report.client.lastName}`, 20, 50);
+  // 🧾 Descargar PDF profesional desde backend
+  const downloadPDF = async (report: any) => {
+    try {
+      // 📎 Usa el endpoint /budgets/:id/pdf que genera el PDF completo con logo y legales
+      const pdfUrl = `${import.meta.env.VITE_API_URL}/budgets/${report.budgetId}/pdf`;
 
-    autoTable(doc, {
-      startY: 60,
-      head: [["Vehículo", "Forma de Pago", "Precio de lista", "Cuotas", "Valor Cuota", "Anticipo"]],
-      body: [
-        [
-          `${report.vehicle.brand} ${report.vehicle.model} ${report.vehicle.versionName || ""} (${report.vehicle.plate || "sin patente"})`,
-          report.paymentType,
-          `$${report.listPrice}`,
-          report.installments || "-",
-          report.installmentValue ? `$${report.installmentValue}` : "-",
-          report.downPayment ? `$${report.downPayment}` : "-",
-        ],
-      ],
-    });
+      const response = await fetch(pdfUrl);
+      if (!response.ok) throw new Error("Error al descargar el PDF desde el servidor.");
 
-    doc.text("Este presupuesto es válido por 3 días hábiles.", 20, (doc as any).lastAutoTable.finalY + 20);
-    doc.save(`Presupuesto-${report.id}.pdf`);
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+
+      // 📅 Nombre del archivo con fecha y cliente
+      const today = new Date().toISOString().split("T")[0];
+      const lastName = report.client?.lastName || "Cliente";
+      const fileName = `Presupuesto-${lastName}-${today}-${report.id}.pdf`;
+
+      // 📥 Descargar automáticamente
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+
+      // 👁️ También abrir en nueva pestaña
+      window.open(url, "_blank");
+
+      // Limpieza
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error("❌ Error generando PDF:", error);
+      alert("No se pudo generar el PDF del presupuesto.");
+    }
   };
 
   return (
@@ -129,7 +139,7 @@ const BudgetReports = () => {
                 <TableCell>${r.listPrice}</TableCell>
                 <TableCell>{new Date(r.createdAt).toLocaleDateString()}</TableCell>
                 <TableCell>
-                  <IconButton color="primary" onClick={() => generatePDF(r)}>
+                  <IconButton color="primary" onClick={() => downloadPDF(r)}>
                     <Download />
                   </IconButton>
                 </TableCell>

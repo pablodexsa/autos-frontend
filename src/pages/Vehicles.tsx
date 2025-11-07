@@ -1,4 +1,5 @@
-﻿import React, { useEffect, useMemo, useRef, useState } from "react";
+﻿// src/pages/Vehicles.tsx
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Vehicle } from "../types/vehicle";
 import {
   listVehicles,
@@ -7,13 +8,13 @@ import {
   deleteVehicle,
   VehicleQuery,
 } from "../api/vehicles";
-import { listBrands } from "../api/brands";
-import { listModels } from "../api/models";
-import { listVersions } from "../api/versions";
+import { listBrands, createBrand } from "../api/brands";
+import { listModels, createModel } from "../api/models";
+import { listVersions, createVersion } from "../api/versions";
 import { Brand, Model, Version } from "../types/catalog";
 import "./Vehicles.css";
 import { API_URL } from "../config";
-
+import api from "../api/api"; // ✅ para forzar expiración manual
 
 const initialQuery: VehicleQuery = {
   page: 1,
@@ -23,7 +24,7 @@ const initialQuery: VehicleQuery = {
 };
 
 export default function VehiclesPage() {
-  // Listado
+  // ======= ESTADO GENERAL =======
   const [query, setQuery] = useState<VehicleQuery>(initialQuery);
   const [data, setData] = useState<{ items: Vehicle[]; total: number; totalPages: number }>({
     items: [],
@@ -33,27 +34,29 @@ export default function VehiclesPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Catálogos (para filtros)
+  // ======= CATÁLOGOS =======
   const [brands, setBrands] = useState<Brand[]>([]);
   const [models, setModels] = useState<Model[]>([]);
   const [versions, setVersions] = useState<Version[]>([]);
 
-  // UI
+  // ======= UI =======
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Vehicle | null>(null);
   const [showMoreFilters, setShowMoreFilters] = useState(false);
 
-  // Carga catálogo base
+  // ======= CARGAS INICIALES =======
   useEffect(() => {
     (async () => {
       try {
         const bs = await listBrands();
         setBrands(bs);
-      } catch {}
+      } catch (err) {
+        console.error("Error al cargar marcas:", err);
+      }
     })();
   }, []);
 
-  // Carga dependiente de modelos según brandId (filtro)
+  // Dependencia modelos según marca
   useEffect(() => {
     (async () => {
       if (query.brandId) {
@@ -62,14 +65,12 @@ export default function VehiclesPage() {
       } else {
         setModels([]);
       }
-      // reset dependientes
       setVersions([]);
       setQuery((q) => ({ ...q, modelId: undefined, versionId: undefined }));
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query.brandId]);
 
-  // Carga dependiente de versiones según modelId (filtro)
+  // Dependencia versiones según modelo
   useEffect(() => {
     (async () => {
       if (query.modelId) {
@@ -80,10 +81,9 @@ export default function VehiclesPage() {
       }
       setQuery((q) => ({ ...q, versionId: undefined }));
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query.modelId]);
 
-  // Listado
+  // ======= LISTADO =======
   const fetchData = async () => {
     setLoading(true);
     setError(null);
@@ -100,26 +100,17 @@ export default function VehiclesPage() {
     fetchData();
   }, [JSON.stringify(query)]);
 
-// SSE (actualización en tiempo real)
-const esRef = useRef<EventSource | null>(null);
+  // ======= STREAM REALTIME =======
+  const esRef = useRef<EventSource | null>(null);
+  useEffect(() => {
+    const es = new EventSource(`${API_URL}/vehicles/stream`, { withCredentials: false });
+    es.onmessage = () => fetchData();
+    es.onerror = (err) => console.warn("❌ Error SSE:", err);
+    esRef.current = es;
+    return () => es.close();
+  }, []);
 
-useEffect(() => {
-  // Usamos la misma constante global que en api.ts
-  const es = new EventSource(`${API_URL}/vehicles/stream`, { withCredentials: false });
-
-  es.onmessage = () => fetchData();      // Cuando hay un cambio, recarga datos
-  es.onerror = (err) => {
-    console.warn("❌ Error SSE:", err);
-  };
-
-  esRef.current = es;
-
-  return () => es.close();               // Cierra la conexión al desmontar
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-}, []);
-
-
-  // Helpers
+  // ======= HELPERS =======
   const setField = (name: keyof VehicleQuery, value: any) =>
     setQuery((q) => ({ ...q, page: 1, [name]: value ?? undefined }));
 
@@ -134,8 +125,7 @@ useEffect(() => {
     [data.totalPages]
   );
 
-  // ======= FORMULARIO (ALTA/EDICIÓN) =======
-  // Catálogos del formulario (independientes del filtro, para no pisarlos)
+  // ======= FORMULARIO =======
   const [formBrands, setFormBrands] = useState<Brand[]>([]);
   const [formModels, setFormModels] = useState<Model[]>([]);
   const [formVersions, setFormVersions] = useState<Version[]>([]);
@@ -143,99 +133,100 @@ useEffect(() => {
   const [formModelId, setFormModelId] = useState<number | undefined>(undefined);
   const [formVersionId, setFormVersionId] = useState<number | undefined>(undefined);
 
-  // Carga inicial de marcas para formulario
   useEffect(() => {
     (async () => {
-      try {
-        const bs = await listBrands();
-        setFormBrands(bs);
-      } catch {}
+      const bs = await listBrands();
+      setFormBrands(bs);
     })();
   }, []);
 
-  // Si se edita, precargamos brand/model/version a partir de los textos denormalizados (si contamos con relaciones)
-  useEffect(() => {
-    (async () => {
-      if (editing) {
-        // Intentamos inferir la cadena de ids a partir de los catálogos
-        const bs = formBrands.length ? formBrands : await listBrands();
-        setFormBrands(bs);
-
-        const brand = bs.find((b) => b.name.toLowerCase() === (editing as any).brand?.toLowerCase());
-        if (brand) {
-          setFormBrandId(brand.id);
-          const ms = await listModels(brand.id);
-          setFormModels(ms);
-
-          const model = ms.find((m) => m.name.toLowerCase() === (editing as any).model?.toLowerCase());
-          if (model) {
-            setFormModelId(model.id);
-            const vs = await listVersions(model.id);
-            setFormVersions(vs);
-
-            const version = vs.find((v) => v.name.toLowerCase() === (editing as any).versionName?.toLowerCase());
-            if (version) {
-              setFormVersionId(version.id);
-            } else {
-              setFormVersionId(undefined);
-            }
-          } else {
-            setFormModelId(undefined);
-            setFormVersions([]);
-            setFormVersionId(undefined);
-          }
-        } else {
-          setFormBrandId(undefined);
-          setFormModels([]);
-          setFormModelId(undefined);
-          setFormVersions([]);
-          setFormVersionId(undefined);
-        }
-      } else {
-        // reset
-        setFormBrandId(undefined);
-        setFormModelId(undefined);
-        setFormVersionId(undefined);
-        setFormModels([]);
-        setFormVersions([]);
-      }
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editing, formBrands.length]);
-
-  // Dependencias del formulario
+  // Cargar modelos según marca
   useEffect(() => {
     (async () => {
       if (formBrandId) {
         const ms = await listModels(formBrandId);
         setFormModels(ms);
-      } else {
-        setFormModels([]);
-      }
+      } else setFormModels([]);
       setFormModelId(undefined);
       setFormVersions([]);
       setFormVersionId(undefined);
     })();
   }, [formBrandId]);
 
+  // Cargar versiones según modelo
   useEffect(() => {
     (async () => {
       if (formModelId) {
         const vs = await listVersions(formModelId);
         setFormVersions(vs);
-      } else {
-        setFormVersions([]);
-      }
+      } else setFormVersions([]);
       setFormVersionId(undefined);
     })();
   }, [formModelId]);
 
+  // ======= NUEVAS OPCIONES DE CATÁLOGO =======
+  const handleAddBrand = async () => {
+    const name = prompt("Ingrese el nombre de la nueva marca:");
+    if (!name?.trim()) return;
+    try {
+      const newBrand = await createBrand({ name });
+      setFormBrands((prev) => [...prev, newBrand]);
+      setFormBrandId(newBrand.id);
+      alert("Marca agregada correctamente.");
+    } catch {
+      alert("Error al agregar marca.");
+    }
+  };
+
+  const handleAddModel = async () => {
+    if (!formBrandId) return alert("Seleccione primero una marca.");
+    const name = prompt("Ingrese el nombre del nuevo modelo:");
+    if (!name?.trim()) return;
+    try {
+      const newModel = await createModel(formBrandId, { name });
+      setFormModels((prev) => [...prev, newModel]);
+      setFormModelId(newModel.id);
+      alert("Modelo agregado correctamente.");
+    } catch {
+      alert("Error al agregar modelo.");
+    }
+  };
+
+  const handleAddVersion = async () => {
+    if (!formModelId) return alert("Seleccione primero un modelo.");
+    const name = prompt("Ingrese el nombre de la nueva versión:");
+    if (!name?.trim()) return;
+    try {
+      const newVersion = await createVersion(formModelId, { name });
+      setFormVersions((prev) => [...prev, newVersion]);
+      setFormVersionId(newVersion.id);
+      alert("Versión agregada correctamente.");
+    } catch {
+      alert("Error al agregar versión.");
+    }
+  };
+
+  // ======= FORZAR ACTUALIZACIÓN DE ESTADOS =======
+  const handleForceUpdateStatus = async () => {
+    if (!confirm("¿Deseas actualizar los estados de reservas y vehículos ahora?")) return;
+    try {
+      setLoading(true);
+      await api.post("/reservations/expire");
+      alert("✅ Estados actualizados correctamente. Vehículos liberados si correspondía.");
+      await fetchData();
+    } catch (error) {
+      console.error("Error al actualizar estados:", error);
+      alert("❌ Error al actualizar estados de vehículos.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ======= SUBMIT =======
   const onSubmit = async (ev: React.FormEvent<HTMLFormElement>) => {
     ev.preventDefault();
     const fd = new FormData(ev.currentTarget);
-    // versionId viene del select controlado
     const versionId = formVersionId ? Number(formVersionId) : undefined;
-
     const payload = {
       versionId,
       year: Number(fd.get("year") as string),
@@ -246,16 +237,10 @@ useEffect(() => {
       price: Number(fd.get("price") as string),
       status: String(fd.get("status") || "available"),
     };
-
-    if (!payload.versionId) {
-      alert("Seleccioná marca, modelo y versión");
-      return;
-    }
-
+    if (!payload.versionId) return alert("Seleccioná marca, modelo y versión");
     try {
       if (editing) await updateVehicle(editing.id, payload as any);
       else await createVehicle(payload as any);
-
       setShowForm(false);
       setEditing(null);
       (ev.target as HTMLFormElement).reset();
@@ -275,11 +260,12 @@ useEffect(() => {
     }
   };
 
+  // ======= RENDER =======
   return (
     <div className="vehicles-container">
       <h1>Vehículos</h1>
 
-      {/* Filtros principales en una fila */}
+      {/* === FILTROS === */}
       <div className="filters-main" style={{ flexWrap: "wrap" }}>
         <select
           value={query.brandId || ""}
@@ -313,18 +299,8 @@ useEffect(() => {
           ))}
         </select>
 
-        <input
-          placeholder="Año"
-          type="number"
-          value={query.yearMin || ""}
-          onChange={(e) => setField("yearMin", e.target.value ? Number(e.target.value) : undefined)}
-        />
-
-        <input
-          placeholder="Patente"
-          value={query.plate || ""}
-          onChange={(e) => setField("plate", e.target.value)}
-        />
+        <input placeholder="Año" type="number" value={query.yearMin || ""} onChange={(e) => setField("yearMin", e.target.value ? Number(e.target.value) : undefined)} />
+        <input placeholder="Patente" value={query.plate || ""} onChange={(e) => setField("plate", e.target.value)} />
 
         <button className="btn-secondary" onClick={() => setShowMoreFilters(!showMoreFilters)}>
           {showMoreFilters ? "Ocultar filtros" : "Más filtros"}
@@ -333,61 +309,29 @@ useEffect(() => {
         <button className="btn-primary" onClick={() => fetchData()}>Buscar</button>
       </div>
 
-      {/* Filtros secundarios */}
       {showMoreFilters && (
         <div className="filters-more">
-          <input
-            placeholder="Color"
-            value={query.color || ""}
-            onChange={(e) => setField("color", e.target.value)}
-          />
-          <select
-            value={query.status || ""}
-            onChange={(e) => setField("status", e.target.value || undefined)}
-          >
+          <input placeholder="Color" value={query.color || ""} onChange={(e) => setField("color", e.target.value)} />
+          <select value={query.status || ""} onChange={(e) => setField("status", e.target.value || undefined)}>
             <option value="">Estado</option>
             <option value="available">Disponible</option>
             <option value="reserved">Reservado</option>
             <option value="sold">Vendido</option>
           </select>
-          <input
-            placeholder="Precio mín"
-            type="number"
-            value={query.priceMin || ""}
-            onChange={(e) =>
-              setField("priceMin", e.target.value ? Number(e.target.value) : undefined)
-            }
-          />
-          <input
-            placeholder="Precio máx"
-            type="number"
-            value={query.priceMax || ""}
-            onChange={(e) =>
-              setField("priceMax", e.target.value ? Number(e.target.value) : undefined)
-            }
-          />
-          <input
-            placeholder="Texto libre"
-            value={query.q || ""}
-            onChange={(e) => setField("q", e.target.value)}
-          />
         </div>
       )}
 
-      {/* Acciones */}
-      <div style={{ marginBottom: 12 }}>
-        <button
-          className="btn-primary"
-          onClick={() => {
-            setEditing(null);
-            setShowForm(true);
-          }}
-        >
+      {/* === ACCIONES === */}
+      <div style={{ marginBottom: 12, display: "flex", gap: 10 }}>
+        <button className="btn-primary" onClick={() => { setEditing(null); setShowForm(true); }}>
           Nuevo vehículo
+        </button>
+        <button className="btn-secondary" onClick={handleForceUpdateStatus} disabled={loading}>
+          {loading ? "Actualizando..." : "Actualizar estado"}
         </button>
       </div>
 
-      {/* Tabla */}
+      {/* === TABLA === */}
       {loading ? (
         <p>Cargando...</p>
       ) : error ? (
@@ -418,21 +362,10 @@ useEffect(() => {
                 <td>{v.color}</td>
                 <td>${v.price.toLocaleString()}</td>
                 <td>
-                  {v.status === "available"
-                    ? "Disponible"
-                    : v.status === "reserved"
-                    ? "Reservado"
-                    : "Vendido"}
+                  {v.status === "available" ? "Disponible" : v.status === "reserved" ? "Reservado" : "Vendido"}
                 </td>
                 <td>
-                  <button
-                    className="btn-secondary"
-                    onClick={() => {
-                      setEditing(v);
-                      setShowForm(true);
-                    }}
-                    style={{ marginRight: 6 }}
-                  >
+                  <button className="btn-secondary" onClick={() => { setEditing(v); setShowForm(true); }} style={{ marginRight: 6 }}>
                     Editar
                   </button>
                   <button className="btn-danger" onClick={() => onDelete(v)}>
@@ -443,81 +376,66 @@ useEffect(() => {
             ))}
             {data.items.length === 0 && (
               <tr>
-                <td colSpan={9} style={{ textAlign: "center", padding: 24 }}>
-                  Sin resultados
-                </td>
+                <td colSpan={9} style={{ textAlign: "center", padding: 24 }}>Sin resultados</td>
               </tr>
             )}
           </tbody>
         </table>
       )}
 
-      {/* Paginación */}
+      {/* === PAGINACIÓN === */}
       <div className="pagination">
         <span>Resultados: {data.total}</span>
-        <select
-          value={query.limit || 10}
-          onChange={(e) => setField("limit", Number(e.target.value))}
-        >
+        <select value={query.limit || 10} onChange={(e) => setField("limit", Number(e.target.value))}>
           <option value={10}>10</option>
           <option value={20}>20</option>
           <option value={50}>50</option>
         </select>
         <div style={{ marginLeft: "auto", display: "flex", gap: 4 }}>
           {pages.map((p) => (
-            <button
-              key={p}
-              disabled={p === (query.page || 1)}
-              onClick={() => setField("page", p)}
-            >
+            <button key={p} disabled={p === (query.page || 1)} onClick={() => setField("page", p)}>
               {p}
             </button>
           ))}
         </div>
       </div>
 
-      {/* Modal */}
+      {/* === MODAL === */}
       {showForm && (
         <div className="modal-overlay" onClick={() => setShowForm(false)}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <h3>{editing ? "Editar vehículo" : "Nuevo vehículo"}</h3>
             <form onSubmit={onSubmit}>
               {/* Selects dependientes */}
-              <select
-                value={formBrandId || ""}
-                onChange={(e) => setFormBrandId(e.target.value ? Number(e.target.value) : undefined)}
-                required
-              >
-                <option value="">Marca</option>
-                {formBrands.map((b) => (
-                  <option key={b.id} value={b.id}>{b.name}</option>
-                ))}
-              </select>
+              <div style={{ display: "flex", gap: "6px" }}>
+                <select value={formBrandId || ""} onChange={(e) => setFormBrandId(e.target.value ? Number(e.target.value) : undefined)} required>
+                  <option value="">Marca</option>
+                  {formBrands.map((b) => (
+                    <option key={b.id} value={b.id}>{b.name}</option>
+                  ))}
+                </select>
+                <button type="button" className="btn-secondary" onClick={handleAddBrand}>Agregar</button>
+              </div>
 
-              <select
-                value={formModelId || ""}
-                onChange={(e) => setFormModelId(e.target.value ? Number(e.target.value) : undefined)}
-                required
-                disabled={!formBrandId}
-              >
-                <option value="">{formBrandId ? "Modelo" : "Modelo (selecciona marca)"}</option>
-                {formModels.map((m) => (
-                  <option key={m.id} value={m.id}>{m.name}</option>
-                ))}
-              </select>
+              <div style={{ display: "flex", gap: "6px" }}>
+                <select value={formModelId || ""} onChange={(e) => setFormModelId(e.target.value ? Number(e.target.value) : undefined)} required disabled={!formBrandId}>
+                  <option value="">{formBrandId ? "Modelo" : "Modelo (selecciona marca)"}</option>
+                  {formModels.map((m) => (
+                    <option key={m.id} value={m.id}>{m.name}</option>
+                  ))}
+                </select>
+                <button type="button" className="btn-secondary" disabled={!formBrandId} onClick={handleAddModel}>Agregar</button>
+              </div>
 
-              <select
-                value={formVersionId || ""}
-                onChange={(e) => setFormVersionId(e.target.value ? Number(e.target.value) : undefined)}
-                required
-                disabled={!formModelId}
-                name="versionId" // no usamos fd.get; lo tomamos del estado
-              >
-                <option value="">{formModelId ? "Versión" : "Versión (selecciona modelo)"}</option>
-                {formVersions.map((v) => (
-                  <option key={v.id} value={v.id}>{v.name}</option>
-                ))}
-              </select>
+              <div style={{ display: "flex", gap: "6px" }}>
+                <select value={formVersionId || ""} onChange={(e) => setFormVersionId(e.target.value ? Number(e.target.value) : undefined)} required disabled={!formModelId}>
+                  <option value="">{formModelId ? "Versión" : "Versión (selecciona modelo)"}</option>
+                  {formVersions.map((v) => (
+                    <option key={v.id} value={v.id}>{v.name}</option>
+                  ))}
+                </select>
+                <button type="button" className="btn-secondary" disabled={!formModelId} onClick={handleAddVersion}>Agregar</button>
+              </div>
 
               {/* Resto del formulario */}
               <input name="year" type="number" placeholder="Año" defaultValue={editing?.year || ""} required />
@@ -533,14 +451,7 @@ useEffect(() => {
               </select>
 
               <div className="modal-actions">
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  onClick={() => {
-                    setShowForm(false);
-                    setEditing(null);
-                  }}
-                >
+                <button type="button" className="btn-secondary" onClick={() => { setShowForm(false); setEditing(null); }}>
                   Cancelar
                 </button>
                 <button type="submit" className="btn-primary">Guardar</button>
