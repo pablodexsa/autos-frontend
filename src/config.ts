@@ -7,7 +7,7 @@ const MODE = import.meta.env.MODE;
 export const API_URL =
   import.meta.env.VITE_API_URL ||
   (MODE === "production"
-    ? "https://autos-backend-h3eb.onrender.com/api"
+    ? "https://autos-backend-d4w2.onrender.com/api"
     : "http://localhost:3000/api");
 
 // Log de depuración: muestra a qué API está apuntando el frontend
