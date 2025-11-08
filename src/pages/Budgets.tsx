@@ -16,7 +16,7 @@ import {
 } from "@mui/material";
 import api from "../api/api";
 
-const Budgets = () => {
+const Budgets: React.FC = () => {
   const [vehicles, setVehicles] = useState<any[]>([]);
   const [selectedVehicle, setSelectedVehicle] = useState<any>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -51,6 +51,13 @@ const Budgets = () => {
     prendario: "",
     financiacion: "",
   });
+
+  // Helper: formato ARS
+  const formatPesos = (valor: any) => {
+    if (valor === "" || valor === null || valor === undefined) return "-";
+    const n = Number(valor) || 0;
+    return `$ ${n.toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  };
 
   // 🚗 Cargar vehículos disponibles
   useEffect(() => {
@@ -94,7 +101,7 @@ const Budgets = () => {
   // 🧾 Selección de vehículo
   const handleVehicleChange = (e: any) => {
     const vehicleId = e.target.value;
-    const vehicle = vehicles.find((v) => v.id === vehicleId);
+    const vehicle = vehicles.find((v) => String(v.id) === String(vehicleId));
     if (vehicle) {
       setSelectedVehicle(vehicle);
       setForm((prev) => ({
@@ -112,17 +119,28 @@ const Budgets = () => {
     }
   };
 
-  // 🔹 Validaciones, sugerencias y autocompletar montos
+  // 🔁 Resetear permuta cuando se destilda
+  useEffect(() => {
+    if (!form.hasTradeIn) {
+      setForm((prev) => ({
+        ...prev,
+        tradeInValue: "",
+        balance: selectedVehicle ? String(selectedVehicle.price) : "",
+      }));
+    }
+  }, [form.hasTradeIn, selectedVehicle]);
+
+  // 🔹 Validaciones y cálculo automático
   useEffect(() => {
     if (!selectedVehicle) return;
 
     const price = Number(selectedVehicle.price) || 0;
-    const tradeIn = Number(form.tradeInValue) || 0;
+    const tradeIn = form.hasTradeIn ? Number(form.tradeInValue) || 0 : 0;
     const anticipo = Number(form.downPayment) || 0;
     const montoPrendario = Number(form.montoPrendario) || 0;
     const montoFinanciacion = Number(form.montoFinanciacion) || 0;
 
-    // 🧮 Calcular saldo (precio - permuta)
+    // saldo = precio - permuta (si hay permuta)
     const balance = Math.max(price - tradeIn, 0);
     if (form.balance !== balance.toFixed(2)) {
       setForm((prev) => ({ ...prev, balance: balance.toFixed(2) }));
@@ -148,7 +166,7 @@ const Budgets = () => {
 
     setErrors(newErrors);
 
-    // 💡 Sugerir forma de pago automática según (anticipo + permuta) / precio
+    // 💡 Sugerir forma de pago automática
     const aporteTotal = anticipo + (form.hasTradeIn ? tradeIn : 0);
     const porcentajeSobrePrecio = price > 0 ? (aporteTotal / price) * 100 : 0;
 
@@ -173,11 +191,10 @@ const Budgets = () => {
       });
     }
 
-    // 💰 Autocompletar montos según forma de pago (sobre SALDO)
+    // 💰 Autocompletar montos según forma de pago
     const remanente = Math.max(balance - anticipo, 0);
     const maxPrendario = price * 0.5;
 
-    // Caso A: Anticipo + Prendario
     if (form.paymentType === "anticipo_prendario") {
       const nuevoPrendario = Math.min(remanente, maxPrendario);
       setForm((prev) => ({
@@ -188,22 +205,18 @@ const Budgets = () => {
       }));
     }
 
-    // Caso B: Anticipo + Prendario + Personal
     if (form.paymentType === "anticipo_prendario_personal") {
       const autPrendario = Math.min(remanente, maxPrendario);
       const restanteLuegoPrendario = Math.max(remanente - autPrendario, 0);
       setForm((prev) => ({
         ...prev,
         montoPrendario: autPrendario.toFixed(2),
-        montoPersonal: restanteLuegoPrendario.toFixed(2), // personal cubre lo que falte
+        montoPersonal: restanteLuegoPrendario.toFixed(2),
         montoFinanciacion: "",
       }));
     }
 
-    // Caso C: Anticipo + Prendario + Personal + Financiación
     if (form.paymentType === "anticipo_prendario_financiacion") {
-      // Aquí no autocompletamos personal ni financiación (lo define el vendedor),
-      // solo validamos el tope de financiación personal.
       if (Number(form.montoFinanciacion) > 3500000) {
         setAlert({
           open: true,
@@ -263,7 +276,7 @@ const Budgets = () => {
     selectedVehicle,
   ]);
 
-  // 💾 Guardar presupuesto
+  // 💾 Guardar presupuesto (sin cambios)
   const handleSaveBudget = async () => {
     if (!clientId || !selectedVehicle) {
       alert("Debe seleccionar un cliente y un vehículo antes de generar el presupuesto.");
@@ -284,13 +297,12 @@ const Budgets = () => {
       installmentValue: Number(form.installmentValue) || 0,
       downPayment: Number(form.downPayment) || 0,
       tradeInValue: Number(form.tradeInValue) || 0,
-  // 👇 NUEVOS CAMPOS PARA EL PDF
-  prendarioAmount: Number(form.montoPrendario) || null,
-  prendarioMonths: Number(form.installments) || null,
-  personalAmount: Number(form.montoPersonal) || null,
-  personalMonths: Number(form.installments) || null,
-  financiacionAmount: Number(form.montoFinanciacion) || null,
-  financiacionMonths: Number(form.installments) || null,
+      prendarioAmount: Number(form.montoPrendario) || null,
+      prendarioMonths: Number(form.installments) || null,
+      personalAmount: Number(form.montoPersonal) || null,
+      personalMonths: Number(form.installments) || null,
+      financiacionAmount: Number(form.montoFinanciacion) || null,
+      financiacionMonths: Number(form.installments) || null,
     };
 
     try {
@@ -393,9 +405,7 @@ const Budgets = () => {
             control={
               <Checkbox
                 checked={form.hasTradeIn}
-                onChange={(e) =>
-                  setForm((prev) => ({ ...prev, hasTradeIn: e.target.checked }))
-                }
+                onChange={(e) => setForm((prev) => ({ ...prev, hasTradeIn: e.target.checked }))}
                 sx={{ color: "#ccc" }}
               />
             }
@@ -457,7 +467,7 @@ const Budgets = () => {
           {/* Préstamos */}
           {form.paymentType.includes("prendario") && (
             <TextField
-              label="Monto Préstamo Prendario"
+              label="Monto Préstamo Prendario (neto)"
               type="number"
               value={form.montoPrendario}
               onChange={(e) => setForm((prev) => ({ ...prev, montoPrendario: e.target.value }))}
@@ -470,7 +480,7 @@ const Budgets = () => {
 
           {form.paymentType.includes("personal") && (
             <TextField
-              label="Monto Préstamo Personal"
+              label="Monto Préstamo Personal (neto)"
               type="number"
               value={form.montoPersonal}
               onChange={(e) => setForm((prev) => ({ ...prev, montoPersonal: e.target.value }))}
@@ -481,7 +491,7 @@ const Budgets = () => {
 
           {form.paymentType.includes("financiacion") && (
             <TextField
-              label="Monto Financiación Personal"
+              label="Monto Financiación Personal (neto)"
               type="number"
               value={form.montoFinanciacion}
               onChange={(e) => setForm((prev) => ({ ...prev, montoFinanciacion: e.target.value }))}
@@ -530,13 +540,62 @@ const Budgets = () => {
         <DialogContent>
           <Typography>Cliente: {form.clientName}</Typography>
           <Typography>
-            Vehículo: {selectedVehicle?.brand} {selectedVehicle?.model}
+            Vehículo: {selectedVehicle?.brand} {selectedVehicle?.model} {selectedVehicle?.versionName || ""}
           </Typography>
-          <Typography>Forma de pago: {form.paymentType}</Typography>
+          <Typography>Forma de pago: {form.paymentType || "-"}</Typography>
           {form.installments && <Typography>Cuotas: {form.installments}</Typography>}
-          {form.downPayment && <Typography>Anticipo: ${form.downPayment}</Typography>}
-          {form.tradeInValue && <Typography>Permuta: ${form.tradeInValue}</Typography>}
-          {form.installmentValue && <Typography>Valor de Cuota: ${form.installmentValue}</Typography>}
+          {form.downPayment && <Typography>Anticipo: {formatPesos(form.downPayment)}</Typography>}
+          {form.hasTradeIn && form.tradeInValue && (
+            <Typography>Permuta: {formatPesos(form.tradeInValue)}</Typography>
+          )}
+          {form.installmentValue && (
+            <Typography>Valor de Cuota total (estimado): {formatPesos(form.installmentValue)}</Typography>
+          )}
+
+{(form.montoPrendario || form.montoPersonal || form.montoFinanciacion) && (
+  <Box sx={{ mt: 2 }}>
+    <Typography variant="h6" sx={{ color: "#009879", mb: 1 }}>
+      Detalle de Préstamos y Financiaciones
+    </Typography>
+
+    {form.montoPrendario && Number(form.montoPrendario) > 0 && (
+      <Paper sx={{ p: 2, mb: 1, backgroundColor: "#f9f9f9" }}>
+        <Typography variant="subtitle1" sx={{ color: "#009879" }}>
+          Préstamo Prendario
+        </Typography>
+        <Typography sx={{ color: "#000" }}>
+          Monto (neto): {formatPesos(form.montoPrendario)}
+        </Typography>
+        <Typography sx={{ color: "#000" }}>Cuotas: {form.installments || "-"}</Typography>
+      </Paper>
+    )}
+
+    {form.montoPersonal && Number(form.montoPersonal) > 0 && (
+      <Paper sx={{ p: 2, mb: 1, backgroundColor: "#f9f9f9" }}>
+        <Typography variant="subtitle1" sx={{ color: "#009879" }}>
+          Préstamo Personal
+        </Typography>
+        <Typography sx={{ color: "#000" }}>
+          Monto (neto): {formatPesos(form.montoPersonal)}
+        </Typography>
+        <Typography sx={{ color: "#000" }}>Cuotas: {form.installments || "-"}</Typography>
+      </Paper>
+    )}
+
+    {form.montoFinanciacion && Number(form.montoFinanciacion) > 0 && (
+      <Paper sx={{ p: 2, mb: 1, backgroundColor: "#f9f9f9" }}>
+        <Typography variant="subtitle1" sx={{ color: "#009879" }}>
+          Financiación Personal
+        </Typography>
+        <Typography sx={{ color: "#000" }}>
+          Monto (neto): {formatPesos(form.montoFinanciacion)}
+        </Typography>
+        <Typography sx={{ color: "#000" }}>Cuotas: {form.installments || "-"}</Typography>
+      </Paper>
+    )}
+  </Box>
+)}
+
 
           <Box textAlign="center" mt={3}>
             <Button
@@ -559,7 +618,7 @@ const Budgets = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Snackbar global */}
+      {/* Snackbar */}
       <Snackbar
         open={alert.open}
         autoHideDuration={4500}
