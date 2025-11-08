@@ -48,7 +48,7 @@ const ReservationsPage: React.FC = () => {
   const [client, setClient] = useState<any>(null);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [vehicle, setVehicle] = useState<Vehicle | null>(null);
-  const [amount, setAmount] = useState<number>(500000);
+  const [amount, setAmount] = useState<number>(600000);
   const [guarantors, setGuarantors] = useState<Guarantor[]>([]);
   const [loading, setLoading] = useState(false);
   const [reservationNumber, setReservationNumber] = useState<number | null>(null);
