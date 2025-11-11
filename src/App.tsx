@@ -2,38 +2,44 @@
 import { BrowserRouter as Router, Routes, Route, useLocation } from "react-router-dom";
 import { ThemeProvider, CssBaseline, Box, Toolbar } from "@mui/material";
 import { SnackbarProvider } from "notistack";
+
+// Layout & UI
 import Sidebar from "./components/Sidebar";
 import Header from "./components/Header";
+
+// Auth & Providers
+import { AuthProvider } from "./context/AuthContext";
+import ProtectedRoute from "./components/ProtectedRoute";
+import NotificationProvider from "./context/NotificationProvider";
+
+// Pages
 import Login from "./pages/Login";
+import Home from "./pages/Home";
 import Sales from "./pages/Sales";
 import Vehicles from "./pages/Vehicles";
 import Clients from "./pages/Clients";
 import RolesPage from "./pages/RolesPage";
 import Budgets from "./pages/Budgets";
+import BudgetReports from "./pages/BudgetReports";
 import UsersPage from "./pages/UsersPage";
-import ProtectedRoute from "./components/ProtectedRoute";
-import { AuthProvider } from "./context/AuthContext";
-import theme from "./theme";
-import Home from "./pages/Home";
-import logo from "./assets/logo.jpeg";
-import "./styles/global.css";
-import Users from "./pages/Users";
-import NotificationProvider from "./context/NotificationProvider";
 import InstallmentPayments from "./pages/InstallmentPayments";
 import Installments from "./pages/Installments";
-import BudgetReports from "./pages/BudgetReports";
 import ReservationsPage from "./pages/ReservationsPage";
 import ReservationListPage from "./pages/ReservationListPage";
+import AuditPage from "./pages/AuditPage";
 
-/**
- * Layout principal del sistema
- * Renderiza el Header y Sidebar solo si no estamos en /login
- */
+
+// Assets & global
+import theme from "./theme";
+import logo from "./assets/logo.jpeg";
+import "./styles/global.css";
+
+/** Layout principal */
 const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const location = useLocation();
   const isLoginPage = location.pathname === "/login";
 
-  // Oculta el menú y header en login
+  // ✅ En /login no mostramos el layout
   if (isLoginPage) {
     return <>{children}</>;
   }
@@ -69,10 +75,11 @@ const App = () => {
             <SnackbarProvider maxSnack={3} autoHideDuration={3000}>
               <MainLayout>
                 <Routes>
-                  {/* RUTA PÚBLICA */}
+
+                  {/* ✅ RUTA PÚBLICA */}
                   <Route path="/login" element={<Login />} />
 
-                  {/* RUTAS PROTEGIDAS */}
+                  {/* ✅ RUTAS PROTEGIDAS */}
                   <Route
                     path="/home"
                     element={
@@ -81,6 +88,7 @@ const App = () => {
                       </ProtectedRoute>
                     }
                   />
+
                   <Route
                     path="/roles"
                     element={
@@ -89,6 +97,7 @@ const App = () => {
                       </ProtectedRoute>
                     }
                   />
+
                   <Route
                     path="/reservations"
                     element={
@@ -97,6 +106,7 @@ const App = () => {
                       </ProtectedRoute>
                     }
                   />
+
                   <Route
                     path="/reservation-list"
                     element={
@@ -105,6 +115,7 @@ const App = () => {
                       </ProtectedRoute>
                     }
                   />
+
                   <Route
                     path="/sales"
                     element={
@@ -113,6 +124,7 @@ const App = () => {
                       </ProtectedRoute>
                     }
                   />
+
                   <Route
                     path="/installment-payments"
                     element={
@@ -121,6 +133,7 @@ const App = () => {
                       </ProtectedRoute>
                     }
                   />
+
                   <Route
                     path="/installments"
                     element={
@@ -129,6 +142,7 @@ const App = () => {
                       </ProtectedRoute>
                     }
                   />
+
                   <Route
                     path="/vehicles"
                     element={
@@ -137,6 +151,7 @@ const App = () => {
                       </ProtectedRoute>
                     }
                   />
+
                   <Route
                     path="/clients"
                     element={
@@ -145,6 +160,7 @@ const App = () => {
                       </ProtectedRoute>
                     }
                   />
+
                   <Route
                     path="/budgets"
                     element={
@@ -153,6 +169,7 @@ const App = () => {
                       </ProtectedRoute>
                     }
                   />
+
                   <Route
                     path="/budget-reports"
                     element={
@@ -161,6 +178,18 @@ const App = () => {
                       </ProtectedRoute>
                     }
                   />
+
+<Route
+  path="/audit"
+  element={
+    <ProtectedRoute roles={["admin"]}>
+      <AuditPage />
+    </ProtectedRoute>
+  }
+/>
+
+
+                  {/* ✅ SOLO ADMIN puede acceder al módulo Usuarios */}
                   <Route
                     path="/users"
                     element={
@@ -169,7 +198,8 @@ const App = () => {
                       </ProtectedRoute>
                     }
                   />
-                  {/* Página de inicio protegida */}
+
+                  {/* ✅ PÁGINA DE INICIO */}
                   <Route
                     path="/"
                     element={
@@ -201,12 +231,14 @@ const App = () => {
                               },
                             }}
                           />
+
                           <h1>Bienvenido a De Grazia Automotores</h1>
                           <p>Gestione sus ventas, clientes y presupuestos fácilmente.</p>
                         </Box>
                       </ProtectedRoute>
                     }
                   />
+
                 </Routes>
               </MainLayout>
             </SnackbarProvider>

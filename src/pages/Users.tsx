@@ -39,9 +39,17 @@ export default function Users() {
     const fd = new FormData(ev.target);
     const payload = Object.fromEntries(fd.entries());
 
+    // ✅ Convertir isActive → boolean
+    payload.isActive = payload.isActive === "true";
+    payload.roleId = Number(payload.roleId);
+
+    // ✅ Si es edición y password vacío → no enviarlo
+    if (editing && !payload.password) delete payload.password;
+
     try {
       if (editing) await updateUser(editing.id, payload);
       else await createUser(payload);
+
       setShowForm(false);
       setEditing(null);
       fetchData();
@@ -64,7 +72,7 @@ export default function Users() {
     <div className="users-container">
       <h1>Usuarios</h1>
 
-      {/* ?? Filtros principales */}
+      {/* ✅ Filtros principales */}
       <div className="filters-main">
         <input
           placeholder="Buscar por nombre o email"
@@ -94,7 +102,7 @@ export default function Users() {
         </button>
       </div>
 
-      {/* ?? Tabla */}
+      {/* ✅ Tabla */}
       {loading ? (
         <p>Cargando...</p>
       ) : error ? (
@@ -144,7 +152,7 @@ export default function Users() {
         </table>
       )}
 
-      {/* ?? Modal */}
+      {/* ✅ Modal */}
       {showForm && (
         <div className="modal-overlay" onClick={() => setShowForm(false)}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
@@ -156,6 +164,7 @@ export default function Users() {
                 defaultValue={editing?.name || ""}
                 required
               />
+
               <input
                 type="email"
                 name="email"
@@ -163,7 +172,21 @@ export default function Users() {
                 defaultValue={editing?.email || ""}
                 required
               />
-              <select name="roleId" defaultValue={editing?.role?.id || ""} required>
+
+              {/* ✅ Contraseña solo al crear (editable opcional al editar) */}
+              <input
+                type="password"
+                name="password"
+                placeholder="Contraseña"
+                required={!editing}
+              />
+
+              {/* ✅ Selección de rol */}
+              <select
+                name="roleId"
+                defaultValue={editing?.role?.id || ""}
+                required
+              >
                 <option value="">Seleccionar rol</option>
                 {roles.map((r) => (
                   <option key={r.id} value={r.id}>
@@ -171,6 +194,8 @@ export default function Users() {
                   </option>
                 ))}
               </select>
+
+              {/* ✅ Estado */}
               <select
                 name="isActive"
                 defaultValue={editing?.isActive ? "true" : "false"}

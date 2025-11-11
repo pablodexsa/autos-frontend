@@ -16,8 +16,11 @@ import AttachMoneyIcon from "@mui/icons-material/AttachMoney";
 import PaymentsIcon from "@mui/icons-material/Payments";
 import ListAltIcon from "@mui/icons-material/ListAlt";
 import SettingsIcon from "@mui/icons-material/Settings";
-import EventAvailableIcon from "@mui/icons-material/EventAvailable"; // 🟢 Nuevo icono para Reservas
+import EventAvailableIcon from "@mui/icons-material/EventAvailable";
+import PersonIcon from "@mui/icons-material/Person";
 import { useNavigate, useLocation } from "react-router-dom";
+import { permissions } from "../permissions";
+import { useAuth } from "../context/AuthContext"; // ✅ tu contexto
 
 const drawerWidth = 240;
 
@@ -29,20 +32,37 @@ interface SidebarProps {
 const Sidebar: React.FC<SidebarProps> = ({ mobileOpen, handleDrawerToggle }) => {
   const navigate = useNavigate();
   const location = useLocation();
+  const { user } = useAuth(); // ✅ leemos el usuario logueado
 
-  // ✅ Menú actualizado con Reservas antes de Ventas
+const role =
+  typeof user?.role === "string"
+    ? user.role
+    : user?.role?.name || "";
+
+
   const menuItems = [
-    { text: "Vehículos", icon: <DirectionsCarIcon />, path: "/vehicles" },
-    { text: "Clientes", icon: <PeopleIcon />, path: "/clients" },
-    { text: "Generar Presupuesto", icon: <DescriptionIcon />, path: "/budgets" },
-    { text: "Listado de Presupuestos", icon: <DescriptionIcon />, path: "/budget-reports" },
-    { text: "Reservas", icon: <EventAvailableIcon />, path: "/reservations" }, // 👈 nuevo módulo
-    { text: "Listado de Reservas", icon: <ListAltIcon />, path: "/reservation-list" },
-    { text: "Ventas", icon: <AttachMoneyIcon />, path: "/sales" },
-    { text: "Pago de Cuotas", icon: <PaymentsIcon />, path: "/installment-payments" },
-    { text: "Cuotas", icon: <ListAltIcon />, path: "/installments" },
-    { text: "Configuración", icon: <SettingsIcon />, path: "/settings" },
+    { text: "Vehículos", icon: <DirectionsCarIcon />, path: "/vehicles", key: "vehicles" },
+    { text: "Clientes", icon: <PeopleIcon />, path: "/clients", key: "clients" },
+    { text: "Generar Presupuesto", icon: <DescriptionIcon />, path: "/budgets", key: "budgets" },
+    { text: "Listado de Presupuestos", icon: <DescriptionIcon />, path: "/budget-reports", key: "budget-reports" },
+    { text: "Reservas", icon: <EventAvailableIcon />, path: "/reservations", key: "reservations" },
+    { text: "Listado de Reservas", icon: <ListAltIcon />, path: "/reservation-list", key: "reservation-list" },
+    { text: "Ventas", icon: <AttachMoneyIcon />, path: "/sales", key: "sales" },
+    { text: "Pago de Cuotas", icon: <PaymentsIcon />, path: "/installment-payments", key: "installment-payments" },
+    { text: "Cuotas", icon: <ListAltIcon />, path: "/installments", key: "installments" },
+    { text: "Configuración", icon: <SettingsIcon />, path: "/settings", key: "settings" },
+    { text: "Auditoría del Sistema", icon: <ListAltIcon />, path: "/audit", key: "audit" },
+
+    // ✅ Nuevo módulo Usuarios
+    { text: "Usuarios", icon: <PersonIcon />, path: "/users", key: "users" },
   ];
+
+console.log("=== DEBUG SIDEBAR ===");
+console.log("USER:", user);
+console.log("ROLE OBJ:", user?.role);
+console.log("ROLE NAME:", user?.role?.name);
+console.log("PERMISSIONS:", permissions[user?.role?.name]);
+console.log("======================");
 
   const drawerContent = (
     <Box
@@ -61,37 +81,39 @@ const Sidebar: React.FC<SidebarProps> = ({ mobileOpen, handleDrawerToggle }) => 
 
       <Box sx={{ overflow: "auto", mt: 2 }}>
         <List>
-          {menuItems.map((item) => (
-            <ListItemButton
-              key={item.text}
-              onClick={() => {
-                navigate(item.path);
-                handleDrawerToggle();
-              }}
-              sx={{
-                backgroundColor:
-                  location.pathname === item.path ? "#00BFA5" : "transparent",
-                color:
-                  location.pathname === item.path
-                    ? "#fff"
-                    : "rgba(255,255,255,0.8)",
-                "&:hover": {
+          {menuItems
+            .filter((item) => permissions[role]?.includes(item.key)) // ✅ FILTRO POR ROL
+            .map((item) => (
+              <ListItemButton
+                key={item.text}
+                onClick={() => {
+                  navigate(item.path);
+                  handleDrawerToggle();
+                }}
+                sx={{
                   backgroundColor:
-                    location.pathname === item.path ? "#00d9b8" : "#2a2a3b",
-                },
-                borderRadius: "8px",
-                mx: 1,
-                mb: 1,
-                transition: "0.3s",
-              }}
-            >
-              <ListItemIcon sx={{ color: "inherit" }}>{item.icon}</ListItemIcon>
-              <ListItemText
-                primary={item.text}
-                primaryTypographyProps={{ fontWeight: 500 }}
-              />
-            </ListItemButton>
-          ))}
+                    location.pathname === item.path ? "#00BFA5" : "transparent",
+                  color:
+                    location.pathname === item.path
+                      ? "#fff"
+                      : "rgba(255,255,255,0.8)",
+                  "&:hover": {
+                    backgroundColor:
+                      location.pathname === item.path ? "#00d9b8" : "#2a2a3b",
+                  },
+                  borderRadius: "8px",
+                  mx: 1,
+                  mb: 1,
+                  transition: "0.3s",
+                }}
+              >
+                <ListItemIcon sx={{ color: "inherit" }}>{item.icon}</ListItemIcon>
+                <ListItemText
+                  primary={item.text}
+                  primaryTypographyProps={{ fontWeight: 500 }}
+                />
+              </ListItemButton>
+            ))}
         </List>
       </Box>
     </Box>
@@ -99,7 +121,6 @@ const Sidebar: React.FC<SidebarProps> = ({ mobileOpen, handleDrawerToggle }) => 
 
   return (
     <>
-      {/* Drawer fijo en pantallas grandes */}
       <Drawer
         variant="permanent"
         sx={{
@@ -117,7 +138,6 @@ const Sidebar: React.FC<SidebarProps> = ({ mobileOpen, handleDrawerToggle }) => 
         {drawerContent}
       </Drawer>
 
-      {/* Drawer temporal (mobile) */}
       <Drawer
         variant="temporary"
         open={mobileOpen}

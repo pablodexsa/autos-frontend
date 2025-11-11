@@ -8,11 +8,16 @@
 import { useNavigate, useLocation } from "react-router-dom";
 import { jwtDecode } from "jwt-decode";
 
+interface UserRole {
+  id: number;
+  name: string;
+}
+
 interface User {
   id: number;
   name: string;
   email: string;
-  role: string;
+  role: UserRole;   // ✅ AHORA ES OBJETO, NO STRING
 }
 
 interface JwtPayload {
@@ -20,16 +25,16 @@ interface JwtPayload {
   iat?: number;
   sub?: string | number;
   email?: string;
-  role?: string;
+  role?: any;        // Puede venir string u objeto
 }
 
 interface AuthContextType {
   user: User | null;
   token: string | null;
-  login: (token: string, user: User) => void;
+  login: (token: string, user: any) => void;
   logout: () => void;
   isAuthenticated: boolean;
-  ready: boolean; // 👈 evita el “falso no logueado” al cargar
+  ready: boolean;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -45,20 +50,46 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [ready, setReady] = useState<boolean>(false);
+
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Carga inicial de sesión desde localStorage
+  /** ✅ Normalizar rol siempre a objeto { id, name } */
+  const normalizeRole = (role: any): UserRole => {
+    if (!role) return { id: 0, name: "" };
+
+    // Si ya es objeto
+    if (typeof role === "object") {
+      return { id: role.id, name: role.name };
+    }
+
+    // Si es string, convertirlo a objeto sin perder funcionalidad
+    return { id: 0, name: role };
+  };
+
+  /** ✅ Normalizar usuario siempre al formato correcto */
+  const normalizeUser = (u: any): User => {
+    return {
+      id: u.id,
+      name: u.name,
+      email: u.email,
+      role: normalizeRole(u.role),
+    };
+  };
+
+  /** ✅ Hidratación inicial desde localStorage */
   useEffect(() => {
     try {
       const storedToken = localStorage.getItem("token");
       const storedUser = localStorage.getItem("user");
+
       if (storedToken && storedUser) {
         const decoded = jwtDecode<JwtPayload>(storedToken);
         const isExpired = decoded.exp * 1000 < Date.now();
+
         if (!isExpired) {
           setToken(storedToken);
-          setUser(JSON.parse(storedUser));
+          setUser(normalizeUser(JSON.parse(storedUser)));   // ✅ NORMALIZADO
         } else {
           localStorage.removeItem("token");
           localStorage.removeItem("user");
@@ -68,11 +99,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       localStorage.removeItem("token");
       localStorage.removeItem("user");
     } finally {
-      setReady(true); // 👈 marcamos que ya hidrató
+      setReady(true);
     }
   }, []);
 
-  // Sincroniza logout entre pestañas
+  /** ✅ Sincronizar logout entre pestañas */
   useEffect(() => {
     const syncLogout = (e: StorageEvent) => {
       if (e.key === "token" && !e.newValue) {
@@ -85,17 +116,22 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return () => window.removeEventListener("storage", syncLogout);
   }, [location.pathname, navigate]);
 
-  // Login
-  const handleLogin = (newToken: string, newUser: User) => {
+  /** ✅ Login */
+  const handleLogin = (newToken: string, rawUser: any) => {
     if (!newToken) return;
+
+    const normalizedUser = normalizeUser(rawUser);
+
     localStorage.setItem("token", newToken);
-    localStorage.setItem("user", JSON.stringify(newUser));
+    localStorage.setItem("user", JSON.stringify(normalizedUser));
+
     setToken(newToken);
-    setUser(newUser);
+    setUser(normalizedUser);
+
     navigate("/home", { replace: true });
   };
 
-  // Logout
+  /** ✅ Logout */
   const handleLogout = () => {
     localStorage.removeItem("token");
     localStorage.removeItem("user");

@@ -1,0 +1,38 @@
+export const permissions = {
+  admin: [
+    "vehicles",
+    "clients",
+    "budgets",
+    "budget-reports",
+    "reservations",
+    "reservation-list",
+    "sales",
+    "installment-payments",
+    "installments",
+    "settings",
+    "users",
+    "roles",
+    "audit",
+  ],
+
+  vendedor: [
+    "vehicles",
+    "clients",
+    "budgets",
+    "reservations",
+    "reservation-list",
+    "sales",
+    "installment-payments",
+    "installments",
+  ],
+
+  gerencia: [
+    "vehicles",
+    "clients",
+    "budget-reports",
+    "reservation-list",
+    "installments",
+    "installment-payments",
+    "settings",
+  ],
+};
