@@ -2,7 +2,7 @@
 import { useAuth } from "../context/AuthContext";
 import { login as apiLogin } from "../api/auth";
 import "./Login.css";
-import logo from "../assets/logo.jpeg"; // Importando el logo
+import logo from "../assets/logo.jpeg";
 
 export default function Login() {
   const { login } = useAuth();
@@ -18,11 +18,13 @@ export default function Login() {
     try {
       const res = await apiLogin(email, password);
 
-      // ✅ usa el formato { token, user } del backend
-      if (!res?.token || !res?.user) {
+      // ✅ aceptar tanto 'access_token' como 'token'
+      const token = res.access_token || (res as any).token;
+
+      if (!token || !res.user) {
         setError("Respuesta inesperada del servidor.");
       } else {
-        login(res.token, res.user); // ← guarda sesión y redirige automáticamente
+        login(token, res.user); // ✅ ahora pasa el token correcto al AuthContext
       }
     } catch (err: any) {
       setError(err?.response?.data?.message || "Credenciales incorrectas");
@@ -33,7 +35,6 @@ export default function Login() {
 
   return (
     <div className="login-container">
-      {/* Logo en la parte superior izquierda */}
       <div className="logo-container">
         <img src={logo} alt="De Grazia Automotores" className="login-logo" />
         <span className="login-title">De Grazia Automotores</span>
