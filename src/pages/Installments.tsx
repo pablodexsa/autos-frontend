@@ -66,11 +66,13 @@ export default function Installments() {
   const handleCloseSnackbar = () =>
     setSnackbar({ ...snackbar, open: false, message: "" });
 
-  const fetchInstallments = async () => {
-    const data = await listInstallments();
-    setInstallments(data);
-    setFiltered(data);
-  };
+const fetchInstallments = async () => {
+  const data = await listInstallments();
+  console.log("🔥 DATA QUE LLEGA DESDE EL BACK:", data);
+  setInstallments(data);
+  setFiltered(data);
+};
+
 
   useEffect(() => {
     fetchInstallments();
@@ -165,7 +167,10 @@ export default function Installments() {
               .map((i) => (
                 <TableRow key={i.id}>
                   <TableCell>{i.id}</TableCell>
-                  <TableCell>{i.client?.name || "—"}</TableCell>
+<TableCell>
+  {i.client ? `${i.client.firstName} ${i.client.lastName}` : "—"}
+</TableCell>
+
                   <TableCell>${Number(i.amount).toLocaleString()}</TableCell>
                   <TableCell>{new Date(i.dueDate).toLocaleDateString()}</TableCell>
                   <TableCell>{i.paid ? "? Pagada" : "? Pendiente"}</TableCell>

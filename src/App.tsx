@@ -27,6 +27,7 @@ import Installments from "./pages/Installments";
 import ReservationsPage from "./pages/ReservationsPage";
 import ReservationListPage from "./pages/ReservationListPage";
 import AuditPage from "./pages/AuditPage";
+import SalesList from './pages/SalesList';
 
 
 // Assets & global
@@ -121,6 +122,15 @@ const App = () => {
                     element={
                       <ProtectedRoute>
                         <Sales />
+                      </ProtectedRoute>
+                    }
+                  />
+
+                  <Route
+                    path="/sales/list"
+                    element={
+                      <ProtectedRoute>
+                        <SalesList />
                       </ProtectedRoute>
                     }
                   />

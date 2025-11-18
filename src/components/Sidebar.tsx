@@ -47,9 +47,10 @@ const role =
     { text: "Listado de Presupuestos", icon: <DescriptionIcon />, path: "/budget-reports", key: "budget-reports" },
     { text: "Reservas", icon: <EventAvailableIcon />, path: "/reservations", key: "reservations" },
     { text: "Listado de Reservas", icon: <ListAltIcon />, path: "/reservation-list", key: "reservation-list" },
-    { text: "Ventas", icon: <AttachMoneyIcon />, path: "/sales", key: "sales" },
-    { text: "Pago de Cuotas", icon: <PaymentsIcon />, path: "/installment-payments", key: "installment-payments" },
+{ text: "Ventas", icon: <AttachMoneyIcon />, path: "/sales", key: "sales" },
+{ text: "Listado de Ventas", icon: <ListAltIcon />, path: "/sales/list", key: "sales-list" },
     { text: "Cuotas", icon: <ListAltIcon />, path: "/installments", key: "installments" },
+{ text: "Pago de Cuotas", icon: <PaymentsIcon />, path: "/installment-payments", key: "installment-payments" },
     { text: "Configuración", icon: <SettingsIcon />, path: "/settings", key: "settings" },
     { text: "Auditoría del Sistema", icon: <ListAltIcon />, path: "/audit", key: "audit" },
 
