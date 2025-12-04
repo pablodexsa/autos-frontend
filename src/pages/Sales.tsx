@@ -45,6 +45,9 @@ const Sales: React.FC = () => {
     financiacion: "",
   });
 
+  // 🆕 Tasas de financiación leídas del backend
+  const [loanRates, setLoanRates] = useState<Record<string, number>>({});
+
   // Sugerimos próximo mes y el siguiente para el inicio de pagos
   const nextTwoMonths = useMemo(() => {
     const now = new Date();
@@ -65,8 +68,7 @@ const Sales: React.FC = () => {
     price: "",
 
     // forma de pago y montos
-    // "contado" | "anticipo_prendario" | "anticipo_prendario_personal" | "anticipo_prendario_financiacion"
-    paymentType: "",
+    paymentType: "", // "contado" | "anticipo_prendario" | "anticipo_prendario_personal" | "anticipo_prendario_financiacion"
     installments: "",
 
     hasTradeIn: false,
@@ -95,6 +97,30 @@ const Sales: React.FC = () => {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     })}`;
+  };
+
+  // 🆕 Cargar tasas desde /loan-rates
+  useEffect(() => {
+    api
+      .get("/loan-rates")
+      .then((res) => {
+        const map: Record<string, number> = {};
+        (res.data || []).forEach((r: any) => {
+          const key = `${r.type}_${r.months}`; // ej: "prendario_12"
+          map[key] = Number(r.rate);
+        });
+        setLoanRates(map);
+      })
+      .catch((err) => {
+        console.error("Error cargando tasas de financiación:", err);
+      });
+  }, []);
+
+  const getRate = (
+    type: "prendario" | "personal" | "financiacion",
+    months: number
+  ): number => {
+    return loanRates[`${type}_${months}`] ?? 0;
   };
 
   // 🚗 Cargar vehículos (disponibles + si el DNI tiene reserva aceptada)
@@ -245,7 +271,29 @@ const Sales: React.FC = () => {
       }
     }
 
-    // 💡 Sugerencia automática de forma de pago
+    // 🧹 Si la forma de pago es CONTADO, limpiamos préstamos y cuotas
+    if (form.paymentType === "contado") {
+      if (
+        form.downPayment ||
+        form.montoPrendario ||
+        form.montoPersonal ||
+        form.montoFinanciacion ||
+        form.installments
+      ) {
+        setForm((prev) => ({
+          ...prev,
+          downPayment: "",
+          montoPrendario: "",
+          montoPersonal: "",
+          montoFinanciacion: "",
+          installments: "",
+        }));
+      }
+      // No sugerimos ni autocompletamos nada cuando es contado
+      return;
+    }
+
+    // 💡 Sugerencia automática de forma de pago (solo si NO es contado)
     const aporteTotal = anticipo + (form.hasTradeIn ? tradeIn : 0);
     const porcentaje = price > 0 ? (aporteTotal / price) * 100 : 0;
 
@@ -316,7 +364,9 @@ const Sales: React.FC = () => {
       const restanteDespuesFin = Math.max(restante - inHouse, 0);
 
       const pStr = autPrendario ? autPrendario.toFixed(2) : "";
-      const persStr = restanteDespuesFin ? restanteDespuesFin.toFixed(2) : "";
+      const persStr = restanteDespuesFin
+        ? restanteDespuesFin.toFixed(2)
+        : "";
 
       if (
         form.montoPrendario !== pStr ||
@@ -328,6 +378,14 @@ const Sales: React.FC = () => {
           montoPersonal: persStr, // 👈 se descuenta automáticamente la financiación del personal
         }));
       }
+
+      if (inHouse > 3500000) {
+        setAlert({
+          open: true,
+          message: "La financiación personal no puede superar $3.500.000.",
+          severity: "warning",
+        });
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
@@ -336,11 +394,12 @@ const Sales: React.FC = () => {
     form.tradeInValue,
     form.downPayment,
     form.montoPrendario,
-    form.montoFinanciacion, // 👈 al cambiar financiación, se recalcula personal
+    form.montoPersonal,
+    form.montoFinanciacion,
     form.paymentType,
   ]);
 
-  // 📊 Calcular totales/valor cuota (idéntico a Budgets) con guarda
+  // 📊 Calcular totales/valor cuota (base, sin tasas, para guardar)
   useEffect(() => {
     if (!selectedVehicle) return;
 
@@ -358,7 +417,8 @@ const Sales: React.FC = () => {
       balance - anticipo - prendario - personal - financiacion,
       0
     );
-    const finalPrice = anticipo + prendario + personal + financiacion + restante;
+    const finalPrice =
+      anticipo + prendario + personal + financiacion + restante;
 
     let installmentValue = 0;
     if (nCuotas > 0 && prendario + personal + financiacion > 0) {
@@ -395,6 +455,31 @@ const Sales: React.FC = () => {
 
   const hasErrors = Object.values(errors).some((msg) => !!msg);
 
+  // 🆕 Cálculos SOLO para el preview con tasas desde la base
+  const nCuotas = Number(form.installments) || 0;
+  const netoPrendario = Number(form.montoPrendario) || 0;
+  const netoPersonal = Number(form.montoPersonal) || 0;
+  const netoFinanciacion = Number(form.montoFinanciacion) || 0;
+
+  const tasaPrendario = getRate("prendario", nCuotas);
+  const tasaPersonal = getRate("personal", nCuotas);
+  const tasaFinanciacion = getRate("financiacion", nCuotas);
+
+  const prendarioConInteres =
+    netoPrendario > 0 ? netoPrendario * (1 + tasaPrendario / 100) : 0;
+  const personalConInteres =
+    netoPersonal > 0 ? netoPersonal * (1 + tasaPersonal / 100) : 0;
+  const financiacionConInteres =
+    netoFinanciacion > 0 ? netoFinanciacion * (1 + tasaFinanciacion / 100) : 0;
+
+  const totalPrestamosConInteres =
+    prendarioConInteres + personalConInteres + financiacionConInteres;
+
+  const valorCuotaTotalConInteres =
+    nCuotas > 0 && totalPrestamosConInteres > 0
+      ? totalPrestamosConInteres / nCuotas
+      : 0;
+
   // ✅ Guardar venta y descargar PDF desde backend
   const handleSaveSale = async () => {
     if (!selectedVehicle) {
@@ -425,7 +510,7 @@ const Sales: React.FC = () => {
       prendarioInstallments: Number(form.installments) || 0,
       personalInstallments: Number(form.installments) || 0,
       inHouseInstallments: Number(form.installments) || 0,
-      // tasas en 0 hasta que las expongamos en UI
+      // tasas en 0 hasta que las expongamos en backend
       prendarioMonthlyRate: 0,
       personalMonthlyRate: 0,
       inHouseMonthlyRate: 0,
@@ -693,46 +778,50 @@ const Sales: React.FC = () => {
             </TextField>
           )}
 
-          {/* Pago (Ventas) */}
-          <TextField
-            select
-            label="Día de pago"
-            value={form.paymentDay}
-            onChange={(e) =>
-              setForm((prev) => ({
-                ...prev,
-                paymentDay: Number(e.target.value),
-              }))
-            }
-            fullWidth
-            sx={{ input: { color: "#fff" }, label: { color: "#ccc" } }}
-          >
-            {[5, 10, 15, 30].map((d) => (
-              <MenuItem key={d} value={d}>
-                {d}
-              </MenuItem>
-            ))}
-          </TextField>
+          {/* Pago (Ventas): solo si hay financiación */}
+          {form.paymentType !== "contado" && (
+            <>
+              <TextField
+                select
+                label="Día de pago"
+                value={form.paymentDay}
+                onChange={(e) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    paymentDay: Number(e.target.value),
+                  }))
+                }
+                fullWidth
+                sx={{ input: { color: "#fff" }, label: { color: "#ccc" } }}
+              >
+                {[5, 10, 15, 30].map((d) => (
+                  <MenuItem key={d} value={d}>
+                    {d}
+                  </MenuItem>
+                ))}
+              </TextField>
 
-          <TextField
-            select
-            label="Mes inicial de pago"
-            value={form.initialPaymentMonth}
-            onChange={(e) =>
-              setForm((prev) => ({
-                ...prev,
-                initialPaymentMonth: e.target.value,
-              }))
-            }
-            fullWidth
-            sx={{ input: { color: "#fff" }, label: { color: "#ccc" } }}
-          >
-            {nextTwoMonths.map((m) => (
-              <MenuItem key={m} value={m}>
-                {m}
-              </MenuItem>
-            ))}
-          </TextField>
+              <TextField
+                select
+                label="Mes inicial de pago"
+                value={form.initialPaymentMonth}
+                onChange={(e) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    initialPaymentMonth: e.target.value,
+                  }))
+                }
+                fullWidth
+                sx={{ input: { color: "#fff" }, label: { color: "#ccc" } }}
+              >
+                {nextTwoMonths.map((m) => (
+                  <MenuItem key={m} value={m}>
+                    {m}
+                  </MenuItem>
+                ))}
+              </TextField>
+            </>
+          )}
         </Box>
 
         <Box mt={3} textAlign="right">
@@ -767,21 +856,126 @@ const Sales: React.FC = () => {
               : "-"}
           </Typography>
           <Typography>Forma de pago: {labelPayment(form.paymentType)}</Typography>
-          {form.installments && (
+          {form.paymentType !== "contado" && form.installments && (
             <Typography>Cuotas: {form.installments}</Typography>
           )}
-          {form.downPayment && (
+          {form.paymentType !== "contado" && form.downPayment && (
             <Typography>Anticipo: {formatPesos(form.downPayment)}</Typography>
           )}
           {form.hasTradeIn && form.tradeInValue && (
             <Typography>Permuta: {formatPesos(form.tradeInValue)}</Typography>
           )}
-          {form.installmentValue && (
-            <Typography>
-              Valor de Cuota total (estimado):{" "}
-              {formatPesos(form.installmentValue)}
-            </Typography>
-          )}
+
+          {/* Valor de cuota total con financiación real */}
+          {form.paymentType !== "contado" &&
+            valorCuotaTotalConInteres > 0 && (
+              <Typography>
+                Valor de Cuota total (con financiación):{" "}
+                {formatPesos(valorCuotaTotalConInteres)}
+              </Typography>
+            )}
+
+          {/* Detalle de préstamos y financiaciones */}
+          {form.paymentType !== "contado" &&
+            (netoPrendario || netoPersonal || netoFinanciacion) && (
+              <Box sx={{ mt: 2 }}>
+                <Typography
+                  variant="h6"
+                  sx={{ color: "#009879", mb: 1 }}
+                >
+                  Detalle de Préstamos y Financiaciones
+                </Typography>
+
+                {/* Préstamo Prendario */}
+                {netoPrendario > 0 && (
+                  <Paper
+                    sx={{ p: 2, mb: 1, backgroundColor: "#f9f9f9" }}
+                  >
+                    <Typography
+                      variant="subtitle1"
+                      sx={{ color: "#009879" }}
+                    >
+                      Préstamo Prendario
+                    </Typography>
+                    <Typography sx={{ color: "#000" }}>
+                      Monto (neto): {formatPesos(netoPrendario)}
+                    </Typography>
+                    <Typography sx={{ color: "#000" }}>
+                      Tasa aplicada: {tasaPrendario}%
+                    </Typography>
+                    <Typography sx={{ color: "#000" }}>
+                      Cuotas: {form.installments || "-"}
+                    </Typography>
+                    <Typography sx={{ color: "#000" }}>
+                      Valor de cada cuota (con financiación):{" "}
+                      {nCuotas > 0
+                        ? formatPesos(prendarioConInteres / nCuotas)
+                        : "-"}
+                    </Typography>
+                  </Paper>
+                )}
+
+                {/* Préstamo Personal */}
+                {netoPersonal > 0 && (
+                  <Paper
+                    sx={{ p: 2, mb: 1, backgroundColor: "#f9f9f9" }}
+                  >
+                    <Typography
+                      variant="subtitle1"
+                      sx={{ color: "#009879" }}
+                    >
+                      Préstamo Personal
+                    </Typography>
+                    <Typography sx={{ color: "#000" }}>
+                      Monto (neto): {formatPesos(netoPersonal)}
+                    </Typography>
+                    <Typography sx={{ color: "#000" }}>
+                      Tasa aplicada: {tasaPersonal}%
+                    </Typography>
+                    <Typography sx={{ color: "#000" }}>
+                      Cuotas: {form.installments || "-"}
+                    </Typography>
+                    <Typography sx={{ color: "#000" }}>
+                      Valor de cada cuota (con financiación):{" "}
+                      {nCuotas > 0
+                        ? formatPesos(personalConInteres / nCuotas)
+                        : "-"}
+                    </Typography>
+                  </Paper>
+                )}
+
+                {/* Financiación Personal */}
+                {netoFinanciacion > 0 && (
+                  <Paper
+                    sx={{ p: 2, mb: 1, backgroundColor: "#f9f9f9" }}
+                  >
+                    <Typography
+                      variant="subtitle1"
+                      sx={{ color: "#009879" }}
+                    >
+                      Financiación Personal
+                    </Typography>
+                    <Typography sx={{ color: "#000" }}>
+                      Monto (neto): {formatPesos(netoFinanciacion)}
+                    </Typography>
+                    <Typography sx={{ color: "#000" }}>
+                      Tasa aplicada: {tasaFinanciacion}%
+                    </Typography>
+                    <Typography sx={{ color: "#000" }}>
+                      Cuotas: {form.installments || "-"}
+                    </Typography>
+                    <Typography sx={{ color: "#000" }}>
+                      Valor de cada cuota (con financiación):{" "}
+                      {nCuotas > 0
+                        ? formatPesos(
+                            financiacionConInteres / nCuotas
+                          )
+                        : "-"}
+                    </Typography>
+                  </Paper>
+                )}
+              </Box>
+            )}
 
           <Box textAlign="center" mt={3}>
             <Button
