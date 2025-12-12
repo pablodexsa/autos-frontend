@@ -730,7 +730,7 @@ const Budgets: React.FC = () => {
               fullWidth
               sx={{ input: { color: "#fff" }, label: { color: "#ccc" } }}
             >
-              {[6, 12, 18, 24].map((q) => (
+              {[12, 24, 36].map((q) => (
                 <MenuItem key={q} value={q}>
                   {q} cuotas
                 </MenuItem>
