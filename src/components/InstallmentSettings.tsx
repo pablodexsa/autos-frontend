@@ -1,5 +1,5 @@
 ﻿import { useEffect, useState } from "react";
-import { api } from "../api";
+import api from "../api/api";
 import { TextField, Button, Box, Typography } from "@mui/material";
 
 type Setting = {
