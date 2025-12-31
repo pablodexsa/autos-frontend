@@ -18,16 +18,15 @@ import {
   MenuItem,
   Grid,
   TablePagination,
+  TableSortLabel,
 } from "@mui/material";
-import { Delete, AttachFile, Visibility } from "@mui/icons-material";
+import { AttachFile, Visibility, CheckCircle } from "@mui/icons-material";
 import { listInstallments, markInstallmentPaid } from "../api/installments";
-import {
-  createInstallmentPayment,
-  deleteInstallmentPayment,
-} from "../api/installmentPayments";
+import { createInstallmentPayment } from "../api/installmentPayments";
 import api from "../api/api";
 import NotificationSnackbar from "../components/NotificationSnackbar";
 import "../styles/Installments.css";
+
 
 export default function Installments() {
   const [installments, setInstallments] = useState<any[]>([]);
@@ -47,6 +46,13 @@ export default function Installments() {
     status: "",
     dueDate: "",
   });
+
+type Order = "asc" | "desc";
+
+const [order, setOrder] = useState<Order>("asc");
+const [orderBy, setOrderBy] = useState<
+  "installmentLabel" | "client" | "amount" | "dueDate" | "status"
+>("dueDate");
 
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
@@ -103,17 +109,6 @@ const fetchInstallments = async () => {
     }
   };
 
-  const handleDeletePayment = async (id: number) => {
-    if (window.confirm("¿Seguro que deseas eliminar este pago?")) {
-      try {
-        await deleteInstallmentPayment(id);
-        fetchInstallments();
-        showSnackbar("??? Pago eliminado correctamente", "success");
-      } catch {
-        showSnackbar("? Error al eliminar el pago", "error");
-      }
-    }
-  };
 
   const handleOpenReceipt = async (paymentId: number) => {
     try {
@@ -138,8 +133,97 @@ const fetchInstallments = async () => {
     setPage(0);
   };
 
-  const start = page * rowsPerPage + 1;
-  const end = Math.min(start + rowsPerPage - 1, filtered.length);
+const getClientName = (i: any) => {
+  const c = i.client || i.sale?.client;
+  return c ? `${c.firstName ?? ""} ${c.lastName ?? ""}`.trim() : "";
+};
+
+const compare = (a: any, b: any) => {
+  let av: any;
+  let bv: any;
+
+  switch (orderBy) {
+    case "installmentLabel":
+      // "4/12" -> 4 (orden por número de cuota)
+      av = Number(String(a.installmentLabel ?? "").split("/")[0]) || 0;
+      bv = Number(String(b.installmentLabel ?? "").split("/")[0]) || 0;
+      break;
+    case "client":
+      av = getClientName(a).toLowerCase();
+      bv = getClientName(b).toLowerCase();
+      break;
+    case "amount":
+      av = Number(a.amount ?? 0);
+      bv = Number(b.amount ?? 0);
+      break;
+    case "dueDate":
+      av = new Date(a.dueDate).getTime();
+      bv = new Date(b.dueDate).getTime();
+      break;
+    case "status":
+      av = (a.paid ? "PAID" : "PENDING");
+      bv = (b.paid ? "PAID" : "PENDING");
+      break;
+    default:
+      av = 0;
+      bv = 0;
+  }
+
+  if (av < bv) return order === "asc" ? -1 : 1;
+  if (av > bv) return order === "asc" ? 1 : -1;
+  return 0;
+};
+
+const handleRequestSort = (property: typeof orderBy) => {
+  const isAsc = orderBy === property && order === "asc";
+  setOrder(isAsc ? "desc" : "asc");
+  setOrderBy(property);
+};
+
+// ✅ Filtrado + Orden (antes de paginar)
+const filteredSorted = [...installments]
+  .filter((i) => {
+    const q = (filters.client || "").trim().toLowerCase();
+    const name = getClientName(i).toLowerCase();
+    const dni =
+      String(i.client?.dni ?? i.sale?.client?.dni ?? "").toLowerCase();
+
+    const matchesClient = !q || name.includes(q) || dni.includes(q);
+
+    const status = i.paid ? "PAID" : "PENDING";
+    const matchesStatus = !filters.status || status === filters.status;
+
+    const due = i.dueDate ? new Date(i.dueDate) : null;
+    const dueISO = due ? due.toISOString().slice(0, 10) : "";
+    const matchesDueDate = !filters.dueDate || dueISO === filters.dueDate;
+
+    return matchesClient && matchesStatus && matchesDueDate;
+  })
+  .map((i) => ({
+    ...i,
+    // ✅ si tu backend ya manda installmentLabel, esto lo respeta.
+    // si no lo manda, lo calcula en front con sale.installments
+    installmentLabel: i.installmentLabel ?? getInstallmentLabel(i),
+  }))
+  .sort(compare);
+
+const start = page * rowsPerPage + 1;
+const end = Math.min(start + rowsPerPage - 1, filteredSorted.length);
+
+const getInstallmentLabel = (installment: any) => {
+  if (!installment?.sale?.installments?.length) return "—";
+
+  // Ordenamos las cuotas por fecha
+  const ordered = [...installment.sale.installments].sort(
+    (a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime()
+  );
+
+  const index = ordered.findIndex((x) => x.id === installment.id);
+
+  if (index === -1) return "—";
+
+  return `${index + 1}/${ordered.length}`;
+};
 
   return (
     <Box className="installments-container">
@@ -147,12 +231,60 @@ const fetchInstallments = async () => {
         Cuotas
       </Typography>
 
+<Paper sx={{ p: 2, mt: 2, backgroundColor: "#1e1e2f", border: "1px solid rgba(255,255,255,0.08)" }}>
+  <Grid container spacing={2}>
+    <Grid item xs={12} md={5}>
+      <TextField
+        fullWidth
+        label="Cliente (nombre / DNI)"
+        value={filters.client}
+        onChange={(e) => setFilters({ ...filters, client: e.target.value })}
+      />
+    </Grid>
+
+    <Grid item xs={12} md={3}>
+      <TextField
+        select
+        fullWidth
+        label="Estado"
+        value={filters.status}
+        onChange={(e) => setFilters({ ...filters, status: e.target.value })}
+      >
+        <MenuItem value="">Todos</MenuItem>
+        <MenuItem value="PENDING">Pendiente</MenuItem>
+        <MenuItem value="PAID">Pagada</MenuItem>
+      </TextField>
+    </Grid>
+
+    <Grid item xs={12} md={3}>
+      <TextField
+        type="date"
+        fullWidth
+        label="Vence en (fecha exacta)"
+        InputLabelProps={{ shrink: true }}
+        value={filters.dueDate}
+        onChange={(e) => setFilters({ ...filters, dueDate: e.target.value })}
+      />
+    </Grid>
+
+    <Grid item xs={12} md={1} sx={{ display: "flex", alignItems: "center" }}>
+      <Button
+        fullWidth
+        variant="outlined"
+        onClick={() => setFilters({ client: "", status: "", dueDate: "" })}
+      >
+        Limpiar
+      </Button>
+    </Grid>
+  </Grid>
+</Paper>
+
       {/* Tabla */}
       <Paper className="table-container" sx={{ mt: 3 }}>
         <Table>
           <TableHead>
             <TableRow>
-              <TableCell>ID</TableCell>
+              <TableCell>Cuota</TableCell>
               <TableCell>Cliente</TableCell>
               <TableCell>Monto</TableCell>
               <TableCell>Vencimiento</TableCell>
@@ -162,18 +294,18 @@ const fetchInstallments = async () => {
             </TableRow>
           </TableHead>
           <TableBody>
-            {filtered
+            {filteredSorted
               .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
               .map((i) => (
                 <TableRow key={i.id}>
-                  <TableCell>{i.id}</TableCell>
+                  <TableCell>{i.installmentLabel ?? "—"}</TableCell>
 <TableCell>
   {i.client ? `${i.client.firstName} ${i.client.lastName}` : "—"}
 </TableCell>
 
                   <TableCell>${Number(i.amount).toLocaleString()}</TableCell>
                   <TableCell>{new Date(i.dueDate).toLocaleDateString()}</TableCell>
-                  <TableCell>{i.paid ? "? Pagada" : "? Pendiente"}</TableCell>
+                  <TableCell>{i.paid ? "Pagada" : "Pendiente"}</TableCell>
                   <TableCell>
                     {i.payment?.id ? (
                       <IconButton
@@ -187,26 +319,25 @@ const fetchInstallments = async () => {
                       "—"
                     )}
                   </TableCell>
-                  <TableCell>
-                    {i.paid ? (
-                      <IconButton
-                        color="error"
-                        onClick={() => handleDeletePayment(i.payment?.id)}
-                        size="small"
-                      >
-                        <Delete />
-                      </IconButton>
-                    ) : (
-                      <Button
-                        size="small"
-                        variant="contained"
-                        color="success"
-                        onClick={() => handleOpenPayment(i.id)}
-                      >
-                        Pagar
-                      </Button>
-                    )}
-                  </TableCell>
+<TableCell>
+  {i.paid ? (
+    <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+      <CheckCircle sx={{ color: "#2e7d32" }} />
+      <Typography variant="body2" sx={{ color: "#2e7d32", fontWeight: 600 }}>
+        Pagada
+      </Typography>
+    </Box>
+  ) : (
+    <Button
+      size="small"
+      variant="contained"
+      color="success"
+      onClick={() => handleOpenPayment(i.id)}
+    >
+      Pagar
+    </Button>
+  )}
+</TableCell>
                 </TableRow>
               ))}
           </TableBody>
@@ -219,11 +350,11 @@ const fetchInstallments = async () => {
           sx={{ px: 2, py: 1 }}
         >
           <Typography variant="body2" color="#ccc">
-            Mostrando {start}-{end} de {filtered.length} cuotas
+            Mostrando {start}-{end} de {filteredSorted.length} cuotas
           </Typography>
           <TablePagination
             component="div"
-            count={filtered.length}
+            count={filteredSorted.length}
             page={page}
             onPageChange={handleChangePage}
             rowsPerPage={rowsPerPage}

@@ -126,7 +126,7 @@ export default function InstallmentPayments() {
                   )}
                 </TableCell>
                 <TableCell>
-                  {p.isPaid ? "? Pagada" : "? Pendiente"}
+                  {p.isPaid ? "Pagada" : "Pendiente"}
                 </TableCell>
                 <TableCell>
                   <IconButton
