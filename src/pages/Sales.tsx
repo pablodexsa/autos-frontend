@@ -453,7 +453,13 @@ const Sales: React.FC = () => {
     form.tradeInValue,
   ]);
 
-  const hasErrors = Object.values(errors).some((msg) => !!msg);
+const hasErrors = Object.values(errors).some((msg) => !!msg);
+
+const requiresInstallments =
+  !!form.paymentType && form.paymentType !== "contado";
+
+const missingInstallments = requiresInstallments && !form.installments;
+
 
   // 🆕 Cálculos SOLO para el preview con tasas desde la base
   const nCuotas = Number(form.installments) || 0;
@@ -490,6 +496,15 @@ const Sales: React.FC = () => {
       });
       return;
     }
+
+if (form.paymentType !== "contado" && !form.installments) {
+  setAlert({
+    open: true,
+    message: "Debe seleccionar la cantidad de cuotas.",
+    severity: "warning",
+  });
+  return;
+}
 
     const payload = {
       clientDni: form.dni.trim(),
@@ -762,25 +777,30 @@ const Sales: React.FC = () => {
             />
           )}
 
-          {/* Cuotas (si no es contado) */}
-          {form.paymentType !== "contado" && (
-            <TextField
-              select
-              label="Cantidad de Cuotas"
-              value={form.installments}
-              onChange={(e) =>
-                setForm((prev) => ({ ...prev, installments: e.target.value }))
-              }
-              fullWidth
-              sx={{ input: { color: "#fff" }, label: { color: "#ccc" } }}
-            >
-              {[12, 24, 36].map((q) => (
-                <MenuItem key={q} value={q}>
-                  {q} cuotas
-                </MenuItem>
-              ))}
-            </TextField>
-          )}
+{/* Cuotas (si no es contado) */}
+{requiresInstallments && (
+  <TextField
+    select
+    required
+    label="Cantidad de Cuotas"
+    value={form.installments}
+    onChange={(e) =>
+      setForm((prev) => ({ ...prev, installments: e.target.value }))
+    }
+    error={missingInstallments}
+    helperText={missingInstallments ? "Debe seleccionar la cantidad de cuotas." : " "}
+    fullWidth
+    sx={{ input: { color: "#fff" }, label: { color: "#ccc" } }}
+  >
+    {[12, 24, 36].map((q) => (
+      <MenuItem key={q} value={q}>
+        {q} cuotas
+      </MenuItem>
+    ))}
+  </TextField>
+)}
+
+
 
           {/* Pago (Ventas): solo si hay financiación */}
           {form.paymentType !== "contado" && (
@@ -834,7 +854,7 @@ const Sales: React.FC = () => {
             color="primary"
             sx={{ borderRadius: 2 }}
             onClick={() => setPreviewOpen(true)}
-            disabled={!form.vehicleId || hasErrors}
+            disabled={!form.vehicleId || hasErrors || missingInstallments}
           >
             Previsualizar
           </Button>
@@ -987,7 +1007,7 @@ const Sales: React.FC = () => {
               color="primary"
               sx={{ mr: 2 }}
               onClick={handleSaveSale}
-              disabled={hasErrors || !form.vehicleId}
+              disabled={hasErrors || !form.vehicleId || missingInstallments}
             >
               Vender y Descargar PDF
             </Button>
