@@ -20,30 +20,42 @@ export default function InstallmentPayments({ saleId }: { saleId: number }) {
   const [receipt, setReceipt] = useState<File | null>(null);
 
   const load = () => {
-    api.get(`/installment-payments/by-sale/${saleId}`).then((res) => {
-      setPayments(res.data);
-    });
+api.get(`/installment-payments`).then((res) => {
+  // si querés filtrar por saleId en el front:
+  const filtered = (res.data ?? []).filter((p: any) => p.installment?.sale?.id === saleId);
+  setPayments(filtered);
+});
   };
 
-  const handleAdd = async () => {
-    if (!installmentNumber || !paymentDate || !amountPaid) return;
-    const formData = new FormData();
-    formData.append("saleId", String(saleId));
-    formData.append("installmentNumber", String(installmentNumber));
-    formData.append("paymentDate", paymentDate);
-    formData.append("amountPaid", String(amountPaid));
-    if (receipt) formData.append("receipt", receipt);
+const handleAdd = async () => {
+  if (!installmentNumber || !paymentDate || !amountPaid) return;
 
-    await api.post("/installment-payments/upload", formData, {
-      headers: { "Content-Type": "multipart/form-data" },
-    });
+  const formData = new FormData();
 
-    setInstallmentNumber(0);
-    setPaymentDate("");
-    setAmountPaid(0);
-    setReceipt(null);
-    load();
-  };
+  // OJO: tu backend necesita installmentId, no "installmentNumber"
+  // Acá tenés dos opciones:
+  //   (1) Si "installmentNumber" en realidad es el ID de la cuota -> renombralo en UI
+  //   (2) Si es el número (1..N), entonces necesitás un endpoint o resolver el id.
+  //
+  // Asumiendo (1): que el usuario carga el ID de la cuota:
+  formData.append("installmentId", String(installmentNumber));
+
+  formData.append("amount", String(amountPaid));
+  formData.append("paymentDate", paymentDate);
+
+  if (receipt) formData.append("file", receipt); // el backend intercepta "file"
+
+  await api.post("/installment-payments", formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+
+  setInstallmentNumber(0);
+  setPaymentDate("");
+  setAmountPaid(0);
+  setReceipt(null);
+  load();
+};
+
 
   useEffect(() => {
     load();
@@ -85,6 +97,7 @@ export default function InstallmentPayments({ saleId }: { saleId: number }) {
         <TableHead>
           <TableRow>
             <TableCell>Cuota</TableCell>
+            <TableCell>Cliente</TableCell>
             <TableCell>Fecha</TableCell>
             <TableCell>Monto</TableCell>
             <TableCell>Recibo</TableCell>
@@ -93,22 +106,29 @@ export default function InstallmentPayments({ saleId }: { saleId: number }) {
         <TableBody>
           {payments.map((p) => (
             <TableRow key={p.id}>
-              <TableCell>{p.installmentNumber}</TableCell>
+              <TableCell>{p.installment?.id ?? "-"}</TableCell>
+<TableCell>
+  {(() => {
+    const c = p.client || p.installment?.client || p.installment?.sale?.client;
+    return c ? `${c.firstName} ${c.lastName}` : "-";
+  })()}
+</TableCell>
+
               <TableCell>{p.paymentDate}</TableCell>
-              <TableCell>${p.amountPaid}</TableCell>
-              <TableCell>
-                {p.receiptPath ? (
-                  <a
-                    href={`${api.defaults.baseURL}/${p.receiptPath}`}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    Ver
-                  </a>
-                ) : (
-                  "-"
-                )}
-              </TableCell>
+              <TableCell>${p.amount ?? "-"}</TableCell>
+<TableCell>
+  {p.receiptPath ? (
+    <a
+      href={`${api.defaults.baseURL}/installment-payments/${p.id}/receipt`}
+      target="_blank"
+      rel="noreferrer"
+    >
+      Ver
+    </a>
+  ) : (
+    "-"
+  )}
+</TableCell>
             </TableRow>
           ))}
         </TableBody>

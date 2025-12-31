@@ -543,14 +543,18 @@ const Sales: React.FC = () => {
         severity: "success",
       });
       setPreviewOpen(false);
-    } catch (err) {
-      console.error("❌ Error guardando venta:", err);
-      setAlert({
-        open: true,
-        message: "Error al registrar la venta.",
-        severity: "error",
-      });
-    }
+} catch (err: any) {
+  console.log("❌ Error guardando venta FULL:", err);
+  console.log("❌ status:", err?.response?.status);
+  console.log("❌ data:", err?.response?.data);
+  console.log("❌ message:", err?.response?.data?.message);
+  alert(
+    `Error guardando venta: ${err?.response?.status} - ${
+      err?.response?.data?.message || "sin mensaje"
+    }`
+  );
+}
+
   };
 
   const labelPayment = (p: string) => {
@@ -770,7 +774,7 @@ const Sales: React.FC = () => {
               fullWidth
               sx={{ input: { color: "#fff" }, label: { color: "#ccc" } }}
             >
-              {[6, 12, 18, 24].map((q) => (
+              {[12, 24, 36].map((q) => (
                 <MenuItem key={q} value={q}>
                   {q} cuotas
                 </MenuItem>

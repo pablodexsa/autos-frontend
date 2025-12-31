@@ -23,6 +23,8 @@ import {
   deleteInstallmentPayment,
 } from "../api/installmentPayments";
 import "../styles/InstallmentPayments.css";
+import { API_URL } from "../config";
+
 
 export default function InstallmentPayments() {
   const [payments, setPayments] = useState<any[]>([]);
@@ -99,8 +101,13 @@ export default function InstallmentPayments() {
             {payments.map((p) => (
               <TableRow key={p.id}>
                 <TableCell>{p.id}</TableCell>
-                <TableCell>{p.clientName}</TableCell>
-                <TableCell>#{p.installmentId}</TableCell>
+                <TableCell>
+  {(() => {
+    const c = p.client || p.installment?.client || p.installment?.sale?.client;
+    return c ? `${c.firstName ?? ""} ${c.lastName ?? ""}`.trim() : "—";
+  })()}
+</TableCell>
+                <TableCell>{p.installmentLabel ?? `#${p.installmentId}`}</TableCell>
                 <TableCell>${Number(p.amount).toLocaleString()}</TableCell>
                 <TableCell>
                   {new Date(p.paymentDate).toLocaleDateString()}
@@ -108,13 +115,12 @@ export default function InstallmentPayments() {
                 <TableCell>
                   {p.receiptPath ? (
                     <a
-                      href={p.receiptPath}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="link"
-                    >
-                      Ver archivo
-                    </a>
+  href={`${API_URL}/installment-payments/${p.id}/receipt`}
+  target="_blank"
+  rel="noreferrer"
+>
+  Ver archivo
+</a>
                   ) : (
                     "—"
                   )}

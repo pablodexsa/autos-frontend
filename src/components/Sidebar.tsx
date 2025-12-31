@@ -26,8 +26,9 @@ const drawerWidth = 240;
 
 interface SidebarProps {
   mobileOpen: boolean;
-  handleDrawerToggle: () => void;
+  handleDrawerToggle?: () => void;
 }
+
 
 const Sidebar: React.FC<SidebarProps> = ({ mobileOpen, handleDrawerToggle }) => {
   const navigate = useNavigate();
@@ -89,7 +90,7 @@ console.log("======================");
                 key={item.text}
                 onClick={() => {
                   navigate(item.path);
-                  handleDrawerToggle();
+                  handleDrawerToggle?.();
                 }}
                 sx={{
                   backgroundColor:
@@ -142,7 +143,7 @@ console.log("======================");
       <Drawer
         variant="temporary"
         open={mobileOpen}
-        onClose={handleDrawerToggle}
+        onClose={handleDrawerToggle ?? (() => {})}
         ModalProps={{ keepMounted: true }}
         sx={{
           display: { xs: "block", sm: "none" },
