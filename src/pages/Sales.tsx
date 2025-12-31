@@ -151,7 +151,7 @@ const Sales: React.FC = () => {
     const dniValue = e.target.value;
     setForm((prev) => ({ ...prev, dni: dniValue }));
 
-    if (dniValue.trim().length >= 3) {
+    if (dniValue.trim().length == 8) {
       try {
         const res = await api.get(
           `/clients/search/by-dni?dni=${encodeURIComponent(dniValue.trim())}`

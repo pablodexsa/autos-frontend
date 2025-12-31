@@ -105,7 +105,7 @@ const Budgets: React.FC = () => {
     const dniValue = e.target.value;
     setForm((prev) => ({ ...prev, dni: dniValue }));
 
-    if (dniValue.length >= 3) {
+    if (dniValue.length == 8) {
       try {
         const res = await api.get(`/clients/search/by-dni?dni=${dniValue}`);
         if (res.data?.length > 0) {

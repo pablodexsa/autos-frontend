@@ -73,7 +73,7 @@ const ReservationsPage: React.FC = () => {
 
   // 👤 Buscar cliente automáticamente por DNI
   const handleFetchClient = async (dniValue: string) => {
-    if (!dniValue || dniValue.length < 3) return;
+    if (!dniValue || dniValue.length < 8) return;
     try {
       const res = await api.get("/clients/search/by-dni", { params: { dni: dniValue } });
       if (res.data && res.data.length > 0) {
