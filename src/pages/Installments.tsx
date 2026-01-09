@@ -99,41 +99,83 @@ export default function Installments() {
     setOpen(true);
   };
 
-  const handleSubmitPayment = async () => {
-    if (!selectedInstallment) return;
-    try {
-      // 1) Creamos el registro de pago (archivo, comprobante, etc.)
-      const formData = new FormData();
-      formData.append("installmentId", String(selectedInstallment));
-      formData.append("amount", form.amount);
-      formData.append("paymentDate", form.paymentDate);
-      if (form.file) formData.append("file", form.file);
+const handleSubmitPayment = async () => {
+  if (!selectedInstallment) return;
 
-      await createInstallmentPayment(formData);
+  const inst = installments.find(
+    (it) => it.id === selectedInstallment
+  );
 
-      // 2) Aplicamos el pago sobre la cuota (total o parcial)
-      await registerInstallmentPayment(selectedInstallment, {
-        amount: Number(form.amount),
-        paymentDate: form.paymentDate,
-        receiver: form.receiver,
-        observations: form.observations.trim() || undefined,
-      });
+  if (!inst) {
+    showSnackbar("No se encontró la cuota seleccionada", "error");
+    return;
+  }
 
-      setOpen(false);
-      setForm({
-        amount: "",
-        paymentDate: "",
-        file: null,
-        receiver: "AGENCY",
-        observations: "",
-      });
-      fetchInstallments();
-      showSnackbar("Pago registrado con éxito", "success");
-    } catch (e) {
-      console.error(e);
-      showSnackbar("Error al registrar el pago", "error");
-    }
-  };
+  const rawAmount = Number(form.amount);
+  if (!rawAmount || rawAmount <= 0) {
+    showSnackbar("Ingresá un monto válido", "warning");
+    return;
+  }
+
+  // Máximo permitido: primero currentAmount (con interés),
+  // si no está, usamos remainingAmount o amount.
+  const maxPayable = Number(
+    inst.currentAmount ??
+      inst.remainingAmount ??
+      inst.amount ??
+      0
+  );
+
+  if (maxPayable <= 0) {
+    showSnackbar(
+      "La cuota no tiene saldo pendiente para pagar",
+      "warning"
+    );
+    return;
+  }
+
+  if (rawAmount > maxPayable + 0.01) {
+    showSnackbar(
+      `El monto no puede superar el valor actual de la cuota ($ ${maxPayable.toLocaleString()})`,
+      "warning"
+    );
+    return;
+  }
+
+  try {
+    // 1) Crear registro de pago (archivo, etc.)
+    const formData = new FormData();
+    formData.append("installmentId", String(selectedInstallment));
+    formData.append("amount", String(rawAmount));
+    formData.append("paymentDate", form.paymentDate);
+    if (form.file) formData.append("file", form.file);
+
+    await createInstallmentPayment(formData);
+
+    // 2) Aplicar pago sobre la cuota
+    await registerInstallmentPayment(selectedInstallment, {
+      amount: rawAmount,
+      paymentDate: form.paymentDate,
+      receiver: form.receiver,
+      observations: form.observations.trim() || undefined,
+    });
+
+    setOpen(false);
+    setForm({
+      amount: "",
+      paymentDate: "",
+      file: null,
+      receiver: "AGENCY",
+      observations: "",
+    });
+    fetchInstallments();
+    showSnackbar("Pago registrado con éxito", "success");
+  } catch (e) {
+    console.error(e);
+    showSnackbar("Error al registrar el pago", "error");
+  }
+};
+
 
   const handleOpenReceipt = async (paymentId: number) => {
     try {
