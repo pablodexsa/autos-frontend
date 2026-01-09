@@ -25,7 +25,6 @@ import {
 import "../styles/InstallmentPayments.css";
 import { API_URL } from "../config";
 
-
 export default function InstallmentPayments() {
   const [payments, setPayments] = useState<any[]>([]);
   const [open, setOpen] = useState(false);
@@ -65,6 +64,23 @@ export default function InstallmentPayments() {
     }
   };
 
+  const getClientName = (p: any) => {
+    const c =
+      p.client || p.installment?.client || p.installment?.sale?.client;
+    return c ? `${c.firstName ?? ""} ${c.lastName ?? ""}`.trim() : "—";
+  };
+
+  const getReceiverLabel = (p: any) => {
+    const r = p.installment?.receiver;
+    if (r === "AGENCY") return "Agencia";
+    if (r === "STUDIO") return "Estudio";
+    return "—";
+  };
+
+  const getObservations = (p: any) => {
+    return p.installment?.observations || "—";
+  };
+
   return (
     <Box className="installment-payments-container">
       {/* Encabezado */}
@@ -92,6 +108,8 @@ export default function InstallmentPayments() {
               <TableCell>Cuota</TableCell>
               <TableCell>Monto</TableCell>
               <TableCell>Fecha de Pago</TableCell>
+              <TableCell>Recibe</TableCell>
+              <TableCell>Observaciones</TableCell>
               <TableCell>Comprobante</TableCell>
               <TableCell>Estado</TableCell>
               <TableCell>Acciones</TableCell>
@@ -101,33 +119,34 @@ export default function InstallmentPayments() {
             {payments.map((p) => (
               <TableRow key={p.id}>
                 <TableCell>{p.id}</TableCell>
+                <TableCell>{getClientName(p)}</TableCell>
                 <TableCell>
-  {(() => {
-    const c = p.client || p.installment?.client || p.installment?.sale?.client;
-    return c ? `${c.firstName ?? ""} ${c.lastName ?? ""}`.trim() : "—";
-  })()}
-</TableCell>
-                <TableCell>{p.installmentLabel ?? `#${p.installmentId}`}</TableCell>
-                <TableCell>${Number(p.amount).toLocaleString()}</TableCell>
-                <TableCell>
-                  {new Date(p.paymentDate).toLocaleDateString()}
+                  {p.installmentLabel ?? `#${p.installmentId}`}
                 </TableCell>
+                <TableCell>
+                  ${Number(p.amount).toLocaleString()}
+                </TableCell>
+                <TableCell>
+                  {p.paymentDate
+                    ? new Date(p.paymentDate).toLocaleDateString()
+                    : "—"}
+                </TableCell>
+                <TableCell>{getReceiverLabel(p)}</TableCell>
+                <TableCell>{getObservations(p)}</TableCell>
                 <TableCell>
                   {p.receiptPath ? (
                     <a
-  href={`${API_URL}/installment-payments/${p.id}/receipt`}
-  target="_blank"
-  rel="noreferrer"
->
-  Ver archivo
-</a>
+                      href={`${API_URL}/installment-payments/${p.id}/receipt`}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Ver archivo
+                    </a>
                   ) : (
                     "—"
                   )}
                 </TableCell>
-                <TableCell>
-                  {p.isPaid ? "Pagada" : "Pendiente"}
-                </TableCell>
+                <TableCell>{p.isPaid ? "Pagada" : "Pendiente"}</TableCell>
                 <TableCell>
                   <IconButton
                     color="error"
@@ -171,7 +190,9 @@ export default function InstallmentPayments() {
             margin="normal"
             InputLabelProps={{ shrink: true }}
             value={form.paymentDate}
-            onChange={(e) => setForm({ ...form, paymentDate: e.target.value })}
+            onChange={(e) =>
+              setForm({ ...form, paymentDate: e.target.value })
+            }
           />
 
           <Button
@@ -193,7 +214,7 @@ export default function InstallmentPayments() {
 
           {form.file && (
             <Typography variant="body2" sx={{ mt: 1 }}>
-              ?? {form.file.name}
+              {form.file.name}
             </Typography>
           )}
         </DialogContent>
