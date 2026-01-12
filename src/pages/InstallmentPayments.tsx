@@ -15,15 +15,17 @@ import {
   TableBody,
   TableRow,
   TableCell,
+  Grid,
+  MenuItem,
 } from "@mui/material";
-import { Delete, Add, AttachFile } from "@mui/icons-material";
+import { Add, AttachFile, Visibility } from "@mui/icons-material";
 import {
   listInstallmentPayments,
   createInstallmentPayment,
-  deleteInstallmentPayment,
 } from "../api/installmentPayments";
 import "../styles/InstallmentPayments.css";
 import { API_URL } from "../config";
+import api from "../api/api";
 
 export default function InstallmentPayments() {
   const [payments, setPayments] = useState<any[]>([]);
@@ -34,6 +36,18 @@ export default function InstallmentPayments() {
     paymentDate: "",
     file: null as File | null,
   });
+
+  // Filtros
+  const [filters, setFilters] = useState({
+    client: "",
+    fromDate: "",
+    toDate: "",
+    receiver: "",
+  });
+
+  // Dialog de observaciones
+  const [obsOpen, setObsOpen] = useState(false);
+  const [selectedObs, setSelectedObs] = useState<string | null>(null);
 
   const fetchPayments = async () => {
     const data = await listInstallmentPayments();
@@ -57,29 +71,122 @@ export default function InstallmentPayments() {
     fetchPayments();
   };
 
-  const handleDelete = async (id: number) => {
-    if (window.confirm("¿Seguro que deseas eliminar este pago?")) {
-      await deleteInstallmentPayment(id);
-      fetchPayments();
+  // 👉 Helper para formatear fecha sin corrimiento de día
+  const formatDate = (value: any) => {
+    if (!value) return "—";
+    const iso = new Date(value).toISOString().slice(0, 10); // YYYY-MM-DD
+    const [y, m, d] = iso.split("-");
+    return `${Number(d)}/${Number(m)}/${y}`;
+  };
+
+  // Abrir comprobante PDF del sistema
+  const handleOpenSystemReceipt = async (paymentId: number) => {
+    try {
+      const response = await api.get(
+        `/installment-payments/${paymentId}/receipt`,
+        { responseType: "blob" }
+      );
+      const blob = new Blob([response.data], {
+        type: response.headers["content-type"],
+      });
+      const url = window.URL.createObjectURL(blob);
+      window.open(url, "_blank");
+    } catch {
+      alert("No se pudo abrir el comprobante de pago");
     }
+  };
+
+  // Abrir adjunto original
+  const handleOpenAttachment = (paymentId: number) => {
+    const url = `${API_URL}/installment-payments/${paymentId}/attachment`;
+    window.open(url, "_blank");
   };
 
   const getClientName = (p: any) => {
     const c =
-      p.client || p.installment?.client || p.installment?.sale?.client;
-    return c ? `${c.firstName ?? ""} ${c.lastName ?? ""}`.trim() : "—";
+      p.client ||
+      p.installment?.client ||
+      p.installment?.sale?.client ||
+      null;
+    if (!c) return "—";
+    const full = `${c.firstName ?? ""} ${c.lastName ?? ""}`.trim();
+    return full || "—";
   };
 
-  const getReceiverLabel = (p: any) => {
-    const r = p.installment?.receiver;
-    if (r === "AGENCY") return "Agencia";
-    if (r === "STUDIO") return "Estudio";
+  const getClientDni = (p: any) => {
+    const c =
+      p.client ||
+      p.installment?.client ||
+      p.installment?.sale?.client ||
+      null;
+    return c?.dni ? String(c.dni) : "";
+  };
+
+  const getInstallmentLabel = (p: any) => {
+    const inst = p.installment;
+
+    // 1) Si viene numeración en la cuota, la usamos
+    if (inst?.installmentNumber && inst?.totalInstallments) {
+      return `${inst.installmentNumber}/${inst.totalInstallments}`;
+    }
+
+    // 2) Si viene arreglo de cuotas en la venta, calculamos X/Y
+    if (inst?.sale?.installments?.length) {
+      const ordered = [...inst.sale.installments].sort(
+        (a: any, b: any) =>
+          new Date(a.dueDate).getTime() -
+          new Date(b.dueDate).getTime()
+      );
+      const idx = ordered.findIndex((x: any) => x.id === inst.id);
+      if (idx >= 0) {
+        return `${idx + 1}/${ordered.length}`;
+      }
+    }
+
+    // 3) Si el backend manda label ya calculada, la respetamos
+    if (p.installmentLabel) return p.installmentLabel;
+
+    // 4) Fallback: #id
+    if (inst?.id) return `#${inst.id}`;
+    if (p.installmentId) return `#${p.installmentId}`;
     return "—";
   };
 
-  const getObservations = (p: any) => {
-    return p.installment?.observations || "—";
+  const handleOpenObs = (text: string) => {
+    setSelectedObs(text);
+    setObsOpen(true);
   };
+
+  // 🔍 Aplicar filtros en memoria
+  const filteredPayments = payments.filter((p) => {
+    const q = (filters.client || "").trim().toLowerCase();
+    const name = getClientName(p).toLowerCase();
+    const dni = getClientDni(p).toLowerCase();
+
+    const matchesClient =
+      !q || name.includes(q) || dni.includes(q);
+
+    // Fecha de pago en formato YYYY-MM-DD (para comparar con filtros)
+    const payIso = p.paymentDate
+      ? new Date(p.paymentDate).toISOString().slice(0, 10)
+      : "";
+
+    let matchesFrom = true;
+    let matchesTo = true;
+
+    if (filters.fromDate) {
+      matchesFrom = payIso >= filters.fromDate;
+    }
+    if (filters.toDate) {
+      matchesTo = payIso <= filters.toDate;
+    }
+
+    const rec = p.installment?.receiver || "";
+    const matchesReceiver =
+      !filters.receiver || rec === filters.receiver;
+
+    return matchesClient && matchesFrom && matchesTo && matchesReceiver;
+  });
 
   return (
     <Box className="installment-payments-container">
@@ -98,8 +205,94 @@ export default function InstallmentPayments() {
         </Button>
       </Box>
 
+      {/* Panel de filtros */}
+      <Paper
+        sx={{
+          p: 2,
+          mt: 2,
+          backgroundColor: "#1e1e2f",
+          border: "1px solid rgba(255,255,255,0.08)",
+        }}
+      >
+        <Grid container spacing={2}>
+          <Grid item xs={12} md={4}>
+            <TextField
+              fullWidth
+              label="Cliente (nombre / DNI)"
+              value={filters.client}
+              onChange={(e) =>
+                setFilters({ ...filters, client: e.target.value })
+              }
+            />
+          </Grid>
+
+          <Grid item xs={12} md={3}>
+            <TextField
+              type="date"
+              fullWidth
+              label="Fecha desde"
+              InputLabelProps={{ shrink: true }}
+              value={filters.fromDate}
+              onChange={(e) =>
+                setFilters({ ...filters, fromDate: e.target.value })
+              }
+            />
+          </Grid>
+
+          <Grid item xs={12} md={3}>
+            <TextField
+              type="date"
+              fullWidth
+              label="Fecha hasta"
+              InputLabelProps={{ shrink: true }}
+              value={filters.toDate}
+              onChange={(e) =>
+                setFilters({ ...filters, toDate: e.target.value })
+              }
+            />
+          </Grid>
+
+          <Grid item xs={12} md={2}>
+            <TextField
+              select
+              fullWidth
+              label="Recibe"
+              value={filters.receiver}
+              onChange={(e) =>
+                setFilters({ ...filters, receiver: e.target.value })
+              }
+            >
+              <MenuItem value="">Todos</MenuItem>
+              <MenuItem value="AGENCY">Agencia</MenuItem>
+              <MenuItem value="STUDIO">Estudio</MenuItem>
+            </TextField>
+          </Grid>
+
+          <Grid
+            item
+            xs={12}
+            md={12}
+            sx={{ display: "flex", justifyContent: "flex-end", mt: 1 }}
+          >
+            <Button
+              variant="outlined"
+              onClick={() =>
+                setFilters({
+                  client: "",
+                  fromDate: "",
+                  toDate: "",
+                  receiver: "",
+                })
+              }
+            >
+              Limpiar filtros
+            </Button>
+          </Grid>
+        </Grid>
+      </Paper>
+
       {/* Tabla de pagos */}
-      <Paper className="table-container">
+      <Paper className="table-container" sx={{ mt: 3 }}>
         <Table>
           <TableHead>
             <TableRow>
@@ -111,50 +304,70 @@ export default function InstallmentPayments() {
               <TableCell>Recibe</TableCell>
               <TableCell>Observaciones</TableCell>
               <TableCell>Comprobante</TableCell>
-              <TableCell>Estado</TableCell>
-              <TableCell>Acciones</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
-            {payments.map((p) => (
+            {filteredPayments.map((p) => (
               <TableRow key={p.id}>
                 <TableCell>{p.id}</TableCell>
+
                 <TableCell>{getClientName(p)}</TableCell>
+
+                <TableCell>{getInstallmentLabel(p)}</TableCell>
+
                 <TableCell>
-                  {p.installmentLabel ?? `#${p.installmentId}`}
+                  $
+                  {Number(p.amount).toLocaleString("es-AR", {
+                    minimumFractionDigits: 2,
+                  })}
                 </TableCell>
+
+                <TableCell>{formatDate(p.paymentDate)}</TableCell>
+
                 <TableCell>
-                  ${Number(p.amount).toLocaleString()}
-                </TableCell>
-                <TableCell>
-                  {p.paymentDate
-                    ? new Date(p.paymentDate).toLocaleDateString()
+                  {p.installment?.receiver === "AGENCY"
+                    ? "Agencia"
+                    : p.installment?.receiver === "STUDIO"
+                    ? "Estudio"
                     : "—"}
                 </TableCell>
-                <TableCell>{getReceiverLabel(p)}</TableCell>
-                <TableCell>{getObservations(p)}</TableCell>
+
                 <TableCell>
-                  {p.receiptPath ? (
-                    <a
-                      href={`${API_URL}/installment-payments/${p.id}/receipt`}
-                      target="_blank"
-                      rel="noreferrer"
+                  {p.installment?.observations ? (
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      onClick={() =>
+                        handleOpenObs(p.installment.observations)
+                      }
                     >
-                      Ver archivo
-                    </a>
+                      Ver
+                    </Button>
                   ) : (
                     "—"
                   )}
                 </TableCell>
-                <TableCell>{p.isPaid ? "Pagada" : "Pendiente"}</TableCell>
+
                 <TableCell>
+                  {/* Comprobante del sistema */}
                   <IconButton
-                    color="error"
-                    onClick={() => handleDelete(p.id)}
                     size="small"
+                    onClick={() => handleOpenSystemReceipt(p.id)}
+                    title="Ver comprobante de pago"
                   >
-                    <Delete />
+                    <Visibility />
                   </IconButton>
+
+                  {/* Archivo adjunto (si existe) */}
+                  {p.receiptPath && (
+                    <Button
+                      size="small"
+                      sx={{ ml: 1 }}
+                      onClick={() => handleOpenAttachment(p.id)}
+                    >
+                      Adjunto
+                    </Button>
+                  )}
                 </TableCell>
               </TableRow>
             ))}
@@ -190,9 +403,7 @@ export default function InstallmentPayments() {
             margin="normal"
             InputLabelProps={{ shrink: true }}
             value={form.paymentDate}
-            onChange={(e) =>
-              setForm({ ...form, paymentDate: e.target.value })
-            }
+            onChange={(e) => setForm({ ...form, paymentDate: e.target.value })}
           />
 
           <Button
@@ -214,7 +425,7 @@ export default function InstallmentPayments() {
 
           {form.file && (
             <Typography variant="body2" sx={{ mt: 1 }}>
-              {form.file.name}
+              📎 {form.file.name}
             </Typography>
           )}
         </DialogContent>
@@ -226,6 +437,24 @@ export default function InstallmentPayments() {
           <Button onClick={handleSubmit} variant="contained" color="success">
             Guardar
           </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Dialog de Observaciones */}
+      <Dialog
+        open={obsOpen}
+        onClose={() => setObsOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Observaciones</DialogTitle>
+        <DialogContent dividers>
+          <Typography variant="body2" sx={{ whiteSpace: "pre-wrap" }}>
+            {selectedObs}
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setObsOpen(false)}>Cerrar</Button>
         </DialogActions>
       </Dialog>
     </Box>
