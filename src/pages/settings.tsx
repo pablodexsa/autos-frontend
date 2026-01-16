@@ -1,6 +1,7 @@
 ﻿import { Box, Typography, Paper, Stack } from "@mui/material";
 import SettingsLoanRates from "./Settings/SettingsLoanRates";
 import SettingsMaxPersonalFinancing from "./Settings/SettingsMaxPersonalFinancing";
+import SettingsReservationAmount from "./Settings/SettingsReservationAmount";
 
 export default function SettingsPage() {
   return (
@@ -16,6 +17,10 @@ export default function SettingsPage() {
 
         <Paper sx={{ p: 2 }}>
           <SettingsMaxPersonalFinancing />
+        </Paper>
+
+        <Paper sx={{ p: 2 }}>
+          <SettingsReservationAmount />
         </Paper>
       </Stack>
     </Box>

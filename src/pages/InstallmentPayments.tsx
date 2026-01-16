@@ -122,6 +122,13 @@ export default function InstallmentPayments() {
     return c?.dni ? String(c.dni) : "";
   };
 
+const getVehiclePlate = (p: any) => {
+  return (
+    p.installment?.sale?.vehicle?.plate ??
+    "—"
+  );
+};
+
   const getInstallmentLabel = (p: any) => {
     const inst = p.installment;
 
@@ -299,6 +306,7 @@ export default function InstallmentPayments() {
               <TableCell>ID</TableCell>
               <TableCell>Cliente</TableCell>
               <TableCell>Cuota</TableCell>
+              <TableCell>Patente</TableCell>
               <TableCell>Monto</TableCell>
               <TableCell>Fecha de Pago</TableCell>
               <TableCell>Recibe</TableCell>
@@ -314,6 +322,8 @@ export default function InstallmentPayments() {
                 <TableCell>{getClientName(p)}</TableCell>
 
                 <TableCell>{getInstallmentLabel(p)}</TableCell>
+
+                <TableCell>{getVehiclePlate(p)}</TableCell> {/* 👈 NUEVA */}
 
                 <TableCell>
                   $

@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState } from 'react';
+﻿import React, { useEffect, useState, useMemo } from 'react';
 import {
   Box,
   Typography,
@@ -17,6 +17,7 @@ import {
   Divider,
   IconButton,
   Tooltip,
+  TextField,
 } from '@mui/material';
 import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
 import jsPDF from 'jspdf';
@@ -46,6 +47,7 @@ interface Sale {
   createdAt: string;
   paymentDay: number;
   initialPaymentMonth: string;
+  sellerName?: string | null;
 }
 
 const SalesList: React.FC = () => {
@@ -53,6 +55,35 @@ const SalesList: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
   const [open, setOpen] = useState(false);
+
+  // 🔍 Filtros
+  const [sellerFilter, setSellerFilter] = useState('');
+  const [plateFilter, setPlateFilter] = useState('');
+  const [dniFilter, setDniFilter] = useState('');
+
+  const filteredSales = useMemo(
+    () =>
+      sales.filter((s) => {
+        const sellerName = (s.sellerName || '').toLowerCase();
+        const plate = (s.vehicle?.plate || '').toLowerCase();
+        const dni = (s.clientDni || '').toLowerCase();
+
+        const sellerOk = sellerFilter.trim()
+          ? sellerName.includes(sellerFilter.toLowerCase())
+          : true;
+
+        const plateOk = plateFilter.trim()
+          ? plate.includes(plateFilter.toLowerCase())
+          : true;
+
+        const dniOk = dniFilter.trim()
+          ? dni.includes(dniFilter.toLowerCase())
+          : true;
+
+        return sellerOk && plateOk && dniOk;
+      }),
+    [sales, sellerFilter, plateFilter, dniFilter]
+  );
 
   useEffect(() => {
     const fetchSales = async () => {
@@ -98,13 +129,26 @@ const SalesList: React.FC = () => {
       s.clientName || '-',
       s.clientDni || '-',
       `${s.vehicle?.brand || ''} ${s.vehicle?.model || ''}`,
+      s.vehicle?.plate || '-',
+      s.sellerName || '-',
       `$ ${s.finalPrice.toLocaleString()}`,
       new Date(s.createdAt).toLocaleDateString(),
     ]);
 
     autoTable(doc, {
       startY: 30,
-      head: [['ID', 'Cliente', 'DNI', 'Vehículo', 'Precio Final', 'Fecha']],
+      head: [
+        [
+          'ID',
+          'Cliente',
+          'DNI',
+          'Vehículo',
+          'Patente',
+          'Vendedor',
+          'Precio Final',
+          'Fecha',
+        ],
+      ],
       body: rows,
       styles: { fontSize: 9 },
       headStyles: { fillColor: [22, 110, 170] },
@@ -149,6 +193,38 @@ const SalesList: React.FC = () => {
         Listado de Ventas
       </Typography>
 
+      {/* 🔍 Panel de filtros superiores */}
+      <Box display="flex" gap={2} mb={2} flexWrap="wrap">
+        <TextField
+          label="Vendedor"
+          size="small"
+          value={sellerFilter}
+          onChange={(e) => setSellerFilter(e.target.value)}
+        />
+        <TextField
+          label="Patente"
+          size="small"
+          value={plateFilter}
+          onChange={(e) => setPlateFilter(e.target.value)}
+        />
+        <TextField
+          label="DNI comprador"
+          size="small"
+          value={dniFilter}
+          onChange={(e) => setDniFilter(e.target.value)}
+        />
+        <Button
+          variant="outlined"
+          onClick={() => {
+            setSellerFilter('');
+            setPlateFilter('');
+            setDniFilter('');
+          }}
+        >
+          Limpiar
+        </Button>
+      </Box>
+
       <Paper sx={{ mb: 2 }}>
         <TableContainer>
           <Table>
@@ -158,6 +234,8 @@ const SalesList: React.FC = () => {
                 <TableCell>Cliente</TableCell>
                 <TableCell>DNI</TableCell>
                 <TableCell>Vehículo</TableCell>
+                <TableCell>Patente</TableCell>
+                <TableCell>Vendedor</TableCell>
                 <TableCell>Precio Final</TableCell>
                 <TableCell>Fecha</TableCell>
                 <TableCell align="center">Acciones</TableCell>
@@ -165,14 +243,14 @@ const SalesList: React.FC = () => {
               </TableRow>
             </TableHead>
             <TableBody>
-              {sales.length === 0 ? (
+              {filteredSales.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} align="center">
+                  <TableCell colSpan={10} align="center">
                     No hay ventas registradas.
                   </TableCell>
                 </TableRow>
               ) : (
-                sales.map((s) => (
+                filteredSales.map((s) => (
                   <TableRow key={s.id}>
                     <TableCell>{s.id}</TableCell>
                     <TableCell>{s.clientName}</TableCell>
@@ -180,6 +258,8 @@ const SalesList: React.FC = () => {
                     <TableCell>
                       {s.vehicle?.brand} {s.vehicle?.model}
                     </TableCell>
+                    <TableCell>{s.vehicle?.plate || '-'}</TableCell>
+                    <TableCell>{s.sellerName ?? '-'}</TableCell>
                     <TableCell>${s.finalPrice.toLocaleString()}</TableCell>
                     <TableCell>
                       {new Date(s.createdAt).toLocaleDateString()}
@@ -228,8 +308,12 @@ const SalesList: React.FC = () => {
                 Cliente: {selectedSale.clientName} ({selectedSale.clientDni})
               </Typography>
               <Typography variant="subtitle1" gutterBottom>
-                Vehículo: {selectedSale.vehicle?.brand} {selectedSale.vehicle?.model}{' '}
+                Vehículo: {selectedSale.vehicle?.brand}{' '}
+                {selectedSale.vehicle?.model}{' '}
                 {selectedSale.vehicle?.versionName || ''}
+                {selectedSale.vehicle?.plate
+                  ? ` - Patente: ${selectedSale.vehicle.plate}`
+                  : ''}
               </Typography>
               <Typography variant="body2" gutterBottom>
                 Fecha de venta:{' '}
@@ -248,13 +332,16 @@ const SalesList: React.FC = () => {
                 Anticipo: ${selectedSale.downPayment.toLocaleString()}
               </Typography>
               <Typography variant="body2">
-                Financiación Prendaria: ${selectedSale.prendarioAmount.toLocaleString()}
+                Financiación Prendaria:{' '}
+                ${selectedSale.prendarioAmount.toLocaleString()}
               </Typography>
               <Typography variant="body2">
-                Financiación Personal: ${selectedSale.personalAmount.toLocaleString()}
+                Financiación Personal:{' '}
+                ${selectedSale.personalAmount.toLocaleString()}
               </Typography>
               <Typography variant="body2">
-                Financiación Interna: ${selectedSale.inHouseAmount.toLocaleString()}
+                Financiación Interna:{' '}
+                ${selectedSale.inHouseAmount.toLocaleString()}
               </Typography>
               <Divider sx={{ my: 2 }} />
               <Typography variant="h6" color="primary">

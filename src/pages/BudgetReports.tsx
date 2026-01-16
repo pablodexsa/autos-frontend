@@ -54,7 +54,9 @@ const BudgetReports = () => {
       const pdfUrl = `${import.meta.env.VITE_API_URL}/budgets/${report.budgetId}/pdf`;
 
       const response = await fetch(pdfUrl);
-      if (!response.ok) throw new Error("Error al descargar el PDF desde el servidor.");
+      if (!response.ok) {
+        throw new Error("Error al descargar el PDF desde el servidor.");
+      }
 
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
@@ -104,7 +106,9 @@ const BudgetReports = () => {
           <TextField
             label="Vendedor"
             value={filters.seller}
-            onChange={(e) => setFilters({ ...filters, seller: e.target.value })}
+            onChange={(e) =>
+              setFilters({ ...filters, seller: e.target.value })
+            }
           />
           <Button variant="contained" onClick={fetchReports}>
             Buscar
@@ -116,7 +120,8 @@ const BudgetReports = () => {
         <Table>
           <TableHead>
             <TableRow>
-              <TableCell>ID</TableCell>
+              {/* antes: <TableCell>ID</TableCell> */}
+              <TableCell>N° Presupuesto</TableCell>
               <TableCell>Vehículo</TableCell>
               <TableCell>Patente</TableCell>
               <TableCell>Cliente</TableCell>
@@ -130,14 +135,19 @@ const BudgetReports = () => {
           <TableBody>
             {reports.map((r) => (
               <TableRow key={r.id}>
-                <TableCell>{r.id}</TableCell>
-                <TableCell>{`${r.vehicle.brand} ${r.vehicle.model} ${r.vehicle.versionName || ""}`}</TableCell>
+                {/* antes: <TableCell>{r.id}</TableCell> */}
+                <TableCell>{r.budgetId ?? r.id}</TableCell>
+                <TableCell>{`${r.vehicle.brand} ${r.vehicle.model} ${
+                  r.vehicle.versionName || ""
+                }`}</TableCell>
                 <TableCell>{r.vehicle.plate}</TableCell>
                 <TableCell>{`${r.client.firstName} ${r.client.lastName}`}</TableCell>
                 <TableCell>{r.seller?.name || "Anónimo"}</TableCell>
                 <TableCell>{r.paymentType}</TableCell>
                 <TableCell>${r.listPrice}</TableCell>
-                <TableCell>{new Date(r.createdAt).toLocaleDateString()}</TableCell>
+                <TableCell>
+                  {new Date(r.createdAt).toLocaleDateString()}
+                </TableCell>
                 <TableCell>
                   <IconButton color="primary" onClick={() => downloadPDF(r)}>
                     <Download />

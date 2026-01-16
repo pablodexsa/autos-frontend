@@ -16,6 +16,9 @@ import {
 } from "@mui/material";
 import api from "../api/api";
 
+type AlertSeverity = "success" | "info" | "warning" | "error";
+type AlertState = { open: boolean; message: string; severity: AlertSeverity };
+
 const Budgets: React.FC = () => {
   const [vehicles, setVehicles] = useState<any[]>([]);
   const [selectedVehicle, setSelectedVehicle] = useState<any>(null);
@@ -23,24 +26,36 @@ const Budgets: React.FC = () => {
   const [clientId, setClientId] = useState<number | null>(null);
 
   const [form, setForm] = useState({
-    vehicleId: "",
+    // cliente
     dni: "",
     clientName: "",
+
+    // vehículo
+    vehicleId: "",
+    price: "",
+
+    // forma de pago / cuotas
     paymentType: "",
     installments: "",
-    downPayment: "",
-    price: "",
-    balance: "", // saldo = precio - permuta
-    finalPrice: "",
-    installmentValue: "",
+
+    // permuta
     hasTradeIn: false,
     tradeInValue: "",
+    tradeInPlate: "",
+
+    // montos
+    downPayment: "",
     montoPrendario: "",
     montoPersonal: "",
     montoFinanciacion: "",
+
+    // calculados
+    balance: "",
+    finalPrice: "",
+    installmentValue: "",
   });
 
-  const [alert, setAlert] = useState({
+  const [alert, setAlert] = useState<AlertState>({
     open: false,
     message: "",
     severity: "success",
@@ -52,10 +67,10 @@ const Budgets: React.FC = () => {
     financiacion: "",
   });
 
-  // 🆕 Tasas de financiación leídas del backend
   const [loanRates, setLoanRates] = useState<Record<string, number>>({});
+  const [maxPersonalFinancing, setMaxPersonalFinancing] =
+    useState<number>(3500000);
 
-  // Helper: formato ARS
   const formatPesos = (valor: any) => {
     if (valor === "" || valor === null || valor === undefined) return "-";
     const n = Number(valor) || 0;
@@ -65,7 +80,25 @@ const Budgets: React.FC = () => {
     })}`;
   };
 
-  // 🆕 Cargar tasas desde /loan-rates
+  // 🚗 Vehículos disponibles
+  useEffect(() => {
+    api
+      .get("/vehicles", { params: { status: "available" } })
+      .then((res) => {
+        const dataRaw = res.data;
+        const data = Array.isArray(dataRaw)
+          ? dataRaw
+          : Array.isArray(dataRaw?.items)
+          ? dataRaw.items
+          : [];
+        setVehicles(data);
+      })
+      .catch(() =>
+        alert("No se pudieron cargar los vehículos disponibles.")
+      );
+  }, []);
+
+  // Tasas de financiación
   useEffect(() => {
     api
       .get("/loan-rates")
@@ -82,45 +115,101 @@ const Budgets: React.FC = () => {
       });
   }, []);
 
+  // Límite de financiación personal desde /settings (misma lógica que en Ventas)
+  useEffect(() => {
+    api
+      .get("/settings/financing/personal-max")
+      .then((res) => {
+        const v = Number(res.data?.maxPersonalAmount);
+        if (Number.isFinite(v) && v > 0) {
+          setMaxPersonalFinancing(v);
+        }
+      })
+      .catch((err) => {
+        console.error(
+          "Error cargando máximo de financiación personal:",
+          err
+        );
+      });
+  }, []);
+
+  // Mapea 1..36 a 12 / 24 / 36
   const getRate = (
     type: "prendario" | "personal" | "financiacion",
     months: number
   ): number => {
-    return loanRates[`${type}_${months}`] ?? 0;
+    if (!months) return 0;
+    const bracketMonths = months <= 12 ? 12 : months <= 24 ? 24 : 36;
+    return loanRates[`${type}_${bracketMonths}`] ?? 0;
   };
 
-  // 🚗 Cargar vehículos disponibles
-  useEffect(() => {
-    api
-      .get("/vehicles", { params: { status: "available" } })
-      .then((res) => {
-        const data = res.data.items || res.data;
-        setVehicles(data);
-      })
-      .catch(() => alert("No se pudieron cargar los vehículos disponibles."));
-  }, []);
+  // Selección de vehículo
+  const handleVehicleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const id = e.target.value;
+    const vehicle = vehicles.find((v) => String(v.id) === String(id)) || null;
+    setSelectedVehicle(vehicle);
 
-  // 🔍 Buscar cliente por DNI
+    if (vehicle) {
+      const priceStr = String(Number(vehicle.price || 0).toFixed(2));
+      setForm((prev) => ({
+        ...prev,
+        vehicleId: id,
+        price: priceStr,
+        balance: priceStr,
+        finalPrice: priceStr,
+        downPayment: "",
+        tradeInValue: "",
+        tradeInPlate: "",
+        montoPrendario: "",
+        montoPersonal: "",
+        montoFinanciacion: "",
+        installments: "",
+      }));
+      setErrors({ tradeIn: "", prendario: "", financiacion: "" });
+    } else {
+      setForm((prev) => ({
+        ...prev,
+        vehicleId: "",
+        price: "",
+        balance: "",
+        finalPrice: "",
+        downPayment: "",
+        tradeInValue: "",
+        tradeInPlate: "",
+        montoPrendario: "",
+        montoPersonal: "",
+        montoFinanciacion: "",
+        installments: "",
+      }));
+      setErrors({ tradeIn: "", prendario: "", financiacion: "" });
+    }
+  };
+
+  // 🔍 DNI → cliente
   const handleDniChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const dniValue = e.target.value;
     setForm((prev) => ({ ...prev, dni: dniValue }));
 
-    if (dniValue.length == 8) {
+    if (dniValue.trim().length === 8) {
       try {
-        const res = await api.get(`/clients/search/by-dni?dni=${dniValue}`);
+        const res = await api.get(
+          `/clients/search/by-dni?dni=${dniValue.trim()}`
+        );
         if (res.data?.length > 0) {
-          const cliente = res.data[0];
+          const c = res.data[0];
           setForm((prev) => ({
             ...prev,
-            clientName: `${cliente.firstName} ${cliente.lastName}`,
+            clientName: `${c.firstName} ${c.lastName}`,
           }));
-          setClientId(cliente.id);
+          setClientId(c.id);
         } else {
           setForm((prev) => ({ ...prev, clientName: "" }));
           setClientId(null);
         }
       } catch (err) {
         console.error("Error buscando cliente:", err);
+        setForm((prev) => ({ ...prev, clientName: "" }));
+        setClientId(null);
       }
     } else {
       setForm((prev) => ({ ...prev, clientName: "" }));
@@ -128,261 +217,115 @@ const Budgets: React.FC = () => {
     }
   };
 
-  // 🧾 Selección de vehículo
-  const handleVehicleChange = (e: any) => {
-    const vehicleId = e.target.value;
-    const vehicle = vehicles.find((v) => String(v.id) === String(vehicleId));
-    if (vehicle) {
-      setSelectedVehicle(vehicle);
-      setForm((prev) => ({
-        ...prev,
-        vehicleId,
-        price: vehicle.price,
-        balance: vehicle.price,
-        finalPrice: vehicle.price,
-        downPayment: "",
-        tradeInValue: "",
-        montoPrendario: "",
-        montoPersonal: "",
-        montoFinanciacion: "",
-      }));
-    }
-  };
-
-  // 🔁 Resetear permuta cuando se destilda
+  // Resetear permuta al destildar (mismo concepto que en Ventas)
   useEffect(() => {
     if (!form.hasTradeIn) {
       setForm((prev) => ({
         ...prev,
         tradeInValue: "",
-        balance: selectedVehicle ? String(selectedVehicle.price) : "",
+        tradeInPlate: "",
+        balance: selectedVehicle
+          ? String(Number(selectedVehicle.price || 0).toFixed(2))
+          : "",
       }));
     }
   }, [form.hasTradeIn, selectedVehicle]);
 
-  // 🔹 Validaciones y cálculo automático
+  // Reglas de negocio / validaciones (sin autocompletar montos)
   useEffect(() => {
     if (!selectedVehicle) return;
 
     const price = Number(selectedVehicle.price) || 0;
     const tradeIn = form.hasTradeIn ? Number(form.tradeInValue) || 0 : 0;
-    const anticipo = Number(form.downPayment) || 0;
-    const montoPrendario = Number(form.montoPrendario) || 0;
-    const montoPersonal = Number(form.montoPersonal) || 0;
-    const montoFinanciacion = Number(form.montoFinanciacion) || 0;
+    const montoPrendarioNum = Number(form.montoPrendario) || 0;
+    const montoFinanciacionNum = Number(form.montoFinanciacion) || 0;
 
-    // saldo = precio - permuta (si hay permuta)
-    const balance = Math.max(price - tradeIn, 0);
-    if (form.balance !== balance.toFixed(2)) {
-      setForm((prev) => ({ ...prev, balance: balance.toFixed(2) }));
+    // saldo = precio - permuta
+    const newBalance = Math.max(price - tradeIn, 0);
+    const newBalanceStr = newBalance.toFixed(2);
+    if (form.balance !== newBalanceStr) {
+      setForm((prev) => ({ ...prev, balance: newBalanceStr }));
     }
 
-    const newErrors: any = { tradeIn: "", prendario: "", financiacion: "" };
+    const newErrors = { tradeIn: "", prendario: "", financiacion: "" };
 
-    // ⚠️ Validaciones básicas
+    // Validaciones
     if (form.hasTradeIn && tradeIn > price) {
       newErrors.tradeIn =
         "El valor de la permuta no puede superar el precio del vehículo.";
-      setAlert({
-        open: true,
-        message: newErrors.tradeIn,
-        severity: "warning",
-      });
     }
-
-    if (montoPrendario > price * 0.5) {
+    if (montoPrendarioNum > price * 0.5) {
       newErrors.prendario =
         "El préstamo prendario no puede superar el 50% del valor del vehículo.";
-      setAlert({
-        open: true,
-        message: newErrors.prendario,
-        severity: "warning",
-      });
+    }
+    if (montoFinanciacionNum > maxPersonalFinancing) {
+      newErrors.financiacion = `El monto máximo de financiación personal es $${maxPersonalFinancing.toLocaleString(
+        "es-AR"
+      )}.`;
     }
 
-    if (montoFinanciacion > 3500000) {
-      newErrors.financiacion =
-        "El monto máximo de financiación personal es $3.500.000.";
-      setAlert({
-        open: true,
-        message: newErrors.financiacion,
-        severity: "warning",
-      });
-    }
-
-    // 💡 Sugerir forma de pago automática
-    // 👉 NO sugerimos nada si la forma de pago es 'contado'
-    if (form.paymentType !== "contado") {
-      const aporteTotal = anticipo + (form.hasTradeIn ? tradeIn : 0);
-      const porcentajeSobrePrecio =
-        price > 0 ? (aporteTotal / price) * 100 : 0;
-
+    if (
+      newErrors.tradeIn !== errors.tradeIn ||
+      newErrors.prendario !== errors.prendario ||
+      newErrors.financiacion !== errors.financiacion
+    ) {
+      setErrors(newErrors);
       if (
-        porcentajeSobrePrecio >= 50 &&
-        form.paymentType !== "anticipo_prendario"
+        newErrors.tradeIn ||
+        newErrors.prendario ||
+        newErrors.financiacion
       ) {
-        setForm((prev) => ({ ...prev, paymentType: "anticipo_prendario" }));
-        setAlert({
-          open: true,
-          message:
-            "El anticipo + permuta equivale al 50% o más del precio. Se sugiere 'Anticipo + Préstamo Prendario'.",
-          severity: "info",
-        });
-      } else if (
-        porcentajeSobrePrecio < 50 &&
-        ![
-          "anticipo_prendario_personal",
-          "anticipo_prendario_financiacion",
-        ].includes(form.paymentType)
-      ) {
-        setForm((prev) => ({
-          ...prev,
-          paymentType: "anticipo_prendario_personal",
-        }));
-        setAlert({
-          open: true,
-          message:
-            "El anticipo + permuta es menor al 50% del precio. Se sugiere 'Anticipo + Prendario + Personal'.",
-          severity: "info",
-        });
+        const msg =
+          newErrors.tradeIn || newErrors.prendario || newErrors.financiacion;
+        setAlert({ open: true, message: msg, severity: "warning" });
       }
     }
 
-    // 🧹 Si la forma de pago es CONTADO, limpiamos todos los préstamos
-    // para que el preview no muestre nada de financiación anterior.
+    // Si la forma de pago es CONTADO, limpiamos préstamos, anticipo y cuotas
     if (form.paymentType === "contado") {
       if (
-        montoPrendario !== 0 ||
-        montoPersonal !== 0 ||
-        montoFinanciacion !== 0
+        form.downPayment ||
+        form.montoPrendario ||
+        form.montoPersonal ||
+        form.montoFinanciacion ||
+        form.installments
       ) {
         setForm((prev) => ({
           ...prev,
+          downPayment: "",
           montoPrendario: "",
           montoPersonal: "",
           montoFinanciacion: "",
+          installments: "",
         }));
       }
-      setErrors(newErrors);
-      // No seguimos con autocompletado de préstamos
       return;
     }
-
-    // 💰 Autocompletar montos según forma de pago (siempre intentando cubrir 100%)
-    const remanente = Math.max(balance - anticipo, 0);
-    const maxPrendario = price * 0.5;
-    const maxFinanciacion = 3500000;
-
-    // 👉 Anticipo + Prendario (regla: si no cubre 100%, es inválido)
-    if (form.paymentType === "anticipo_prendario") {
-      if (remanente > maxPrendario) {
-        const msg =
-          "Con anticipo + préstamo prendario no alcanza a cubrir el 100% del valor del vehículo. Aumente el anticipo o elija otra forma de pago.";
-
-        newErrors.prendario = msg;
-
-        setErrors(newErrors);
-        setAlert({
-          open: true,
-          message: msg,
-          severity: "warning",
-        });
-
-        const nuevoPrendario = maxPrendario;
-        setForm((prev) => ({
-          ...prev,
-          montoPrendario:
-            nuevoPrendario > 0 ? nuevoPrendario.toFixed(2) : "",
-          montoPersonal: "",
-          montoFinanciacion: "",
-        }));
-
-        return;
-      }
-
-      const nuevoPrendario = remanente;
-
-      setForm((prev) => ({
-        ...prev,
-        montoPrendario:
-          nuevoPrendario > 0 ? nuevoPrendario.toFixed(2) : "",
-        montoPersonal: "",
-        montoFinanciacion: "",
-      }));
-
-      setErrors(newErrors);
-      return;
-    }
-
-    // 👉 Anticipo + Prendario + Personal
-    if (form.paymentType === "anticipo_prendario_personal") {
-      const nuevoPrendario = Math.min(remanente, maxPrendario);
-      const resto = Math.max(remanente - nuevoPrendario, 0);
-
-      setForm((prev) => ({
-        ...prev,
-        montoPrendario:
-          nuevoPrendario > 0 ? nuevoPrendario.toFixed(2) : "",
-        montoPersonal: resto > 0 ? resto.toFixed(2) : "",
-        montoFinanciacion: "",
-      }));
-
-      setErrors(newErrors);
-      return;
-    }
-
-    // 👉 Anticipo + Prendario + Personal + Financiación
-    if (form.paymentType === "anticipo_prendario_financiacion") {
-      const nuevoPrendario = Math.min(remanente, maxPrendario);
-      const restanteTrasPrendario = Math.max(remanente - nuevoPrendario, 0);
-
-      const sugeridoFinanciacion = Math.min(
-        restanteTrasPrendario,
-        maxFinanciacion
-      );
-
-      const nuevoFinanciacion = sugeridoFinanciacion;
-      const nuevoPersonal = Math.max(
-        restanteTrasPrendario - nuevoFinanciacion,
-        0
-      );
-
-      setForm((prev) => ({
-        ...prev,
-        montoPrendario:
-          nuevoPrendario > 0 ? nuevoPrendario.toFixed(2) : "",
-        montoFinanciacion:
-          nuevoFinanciacion > 0 ? nuevoFinanciacion.toFixed(2) : "",
-        montoPersonal:
-          nuevoPersonal > 0 ? nuevoPersonal.toFixed(2) : "",
-      }));
-
-      setErrors(newErrors);
-      return;
-    }
-
-    // Si ninguna de las formas especiales matchea, solo guardamos errores
-    setErrors(newErrors);
   }, [
-    form.tradeInValue,
+    selectedVehicle,
     form.hasTradeIn,
+    form.tradeInValue,
     form.downPayment,
     form.montoPrendario,
+    form.montoPersonal,
     form.montoFinanciacion,
     form.paymentType,
-    form.montoPersonal,
-    selectedVehicle,
+    maxPersonalFinancing,
+    errors.tradeIn,
+    errors.prendario,
+    errors.financiacion,
   ]);
 
-  // 💳 Calcular presupuesto
-  const calculateBudget = () => {
-    if (!selectedVehicle || !form.paymentType) return;
+  // Totales base (sin tasas)
+  useEffect(() => {
+    if (!selectedVehicle) return;
 
     const price = Number(selectedVehicle.price) || 0;
     const tradeIn = form.hasTradeIn ? Number(form.tradeInValue) || 0 : 0;
     const balance = Math.max(price - tradeIn, 0);
     const anticipo = Math.max(0, Number(form.downPayment) || 0);
     const nCuotas = Number(form.installments) || 0;
+
     const prendario = Number(form.montoPrendario) || 0;
     const personal = Number(form.montoPersonal) || 0;
     const financiacion = Number(form.montoFinanciacion) || 0;
@@ -393,22 +336,30 @@ const Budgets: React.FC = () => {
     );
     const finalPrice =
       anticipo + prendario + personal + financiacion + restante;
-    let installmentValue = 0;
 
+    let installmentValue = 0;
     if (nCuotas > 0 && prendario + personal + financiacion > 0) {
       installmentValue = (prendario + personal + financiacion) / nCuotas;
     }
 
-    setForm((prev) => ({
-      ...prev,
+    const next = {
       finalPrice: finalPrice.toFixed(2),
       installmentValue: installmentValue ? installmentValue.toFixed(2) : "",
-    }));
-  };
+      balance: balance.toFixed(2),
+    };
 
-  useEffect(() => {
-    calculateBudget();
+    if (
+      form.finalPrice !== next.finalPrice ||
+      form.installmentValue !== next.installmentValue ||
+      form.balance !== next.balance
+    ) {
+      setForm((prev) => ({
+        ...prev,
+        ...next,
+      }));
+    }
   }, [
+    selectedVehicle,
     form.paymentType,
     form.installments,
     form.downPayment,
@@ -416,80 +367,50 @@ const Budgets: React.FC = () => {
     form.montoPersonal,
     form.montoFinanciacion,
     form.tradeInValue,
-    selectedVehicle,
+    form.hasTradeIn,
+    form.finalPrice,
+    form.installmentValue,
+    form.balance,
   ]);
 
-  // 💾 Guardar presupuesto
-  const handleSaveBudget = async () => {
-    if (!clientId || !selectedVehicle) {
-      alert(
-        "Debe seleccionar un cliente y un vehículo antes de generar el presupuesto."
-      );
-      return;
-    }
+  const hasErrors = Object.values(errors).some((msg) => !!msg);
 
-    const user = JSON.parse(localStorage.getItem("user") || "null");
-    const sellerId = user?.id || null;
+  const requiresInstallments = form.paymentType === "anticipo_financiacion";
 
-    const payload = {
-      vehicleId: Number(selectedVehicle?.id) || null,
-      clientId: Number(clientId) || null,
-      sellerId,
-      paymentType: form.paymentType || null,
-      installments: form.installments ? Number(form.installments) : null,
-      price: Number(selectedVehicle.price),
-      finalPrice: Number(form.finalPrice),
-      installmentValue: Number(form.installmentValue) || 0,
-      downPayment: Number(form.downPayment) || 0,
-      tradeInValue: Number(form.tradeInValue) || 0,
-      prendarioAmount: Number(form.montoPrendario) || null,
-      prendarioMonths: Number(form.installments) || null,
-      personalAmount: Number(form.montoPersonal) || null,
-      personalMonths: Number(form.installments) || null,
-      financiacionAmount: Number(form.montoFinanciacion) || null,
-      financiacionMonths: Number(form.installments) || null,
-    };
+  const missingInstallments = requiresInstallments && !form.installments;
 
-    try {
-      const res = await api.post("/budgets", payload, {
-        headers: { "Content-Type": "application/json" },
-      });
+  // ---- Regla de composición del precio (global) igual que en Ventas ----
+  const vehiclePrice =
+    selectedVehicle && selectedVehicle.price
+      ? Number(selectedVehicle.price) || 0
+      : 0;
 
-      const newBudget = res.data;
-      if (newBudget?.id) {
-        const pdfUrl = `${import.meta.env.VITE_API_URL}/budgets/${newBudget.id}/pdf`;
-        const response = await fetch(pdfUrl);
-        const blob = await response.blob();
-        const url = window.URL.createObjectURL(blob);
-        const fileName = `Presupuesto-${form.clientName}-${newBudget.id}.pdf`;
-        const link = document.createElement("a");
-        link.href = url;
-        link.download = fileName;
-        link.click();
-        window.open(url, "_blank");
-        window.URL.revokeObjectURL(url);
+  const totalComposition =
+    (Number(form.downPayment) || 0) +
+    (form.hasTradeIn ? Number(form.tradeInValue) || 0 : 0) +
+    (Number(form.montoPrendario) || 0) +
+    (Number(form.montoPersonal) || 0) +
+    (Number(form.montoFinanciacion) || 0);
 
-        setAlert({
-          open: true,
-          message: "Presupuesto guardado y PDF descargado correctamente.",
-          severity: "success",
-        });
-      }
+  const someAmountEntered =
+    (Number(form.downPayment) || 0) ||
+    (form.hasTradeIn ? Number(form.tradeInValue) || 0 : 0) ||
+    (Number(form.montoPrendario) || 0) ||
+    (Number(form.montoPersonal) || 0) ||
+    (Number(form.montoFinanciacion) || 0);
 
-      setPreviewOpen(false);
-    } catch (err) {
-      console.error("❌ Error guardando presupuesto:", err);
-      setAlert({
-        open: true,
-        message: "Error al guardar el presupuesto.",
-        severity: "error",
-      });
-    }
-  };
+  const compositionDiff =
+    selectedVehicle && someAmountEntered
+      ? Math.abs(totalComposition - vehiclePrice)
+      : 0;
 
-  const hasErrors = Object.values(errors).some((msg) => msg !== "");
+  const compositionMismatch =
+    form.paymentType === "anticipo_financiacion" &&
+    !!selectedVehicle &&
+    !!someAmountEntered &&
+    compositionDiff > 1;
 
-  // 🆕 Cálculos SOLO para el preview con tasas desde la base
+  // Preview con tasas
   const nCuotas = Number(form.installments) || 0;
   const netoPrendario = Number(form.montoPrendario) || 0;
   const netoPersonal = Number(form.montoPersonal) || 0;
@@ -514,10 +435,144 @@ const Budgets: React.FC = () => {
       ? totalPrestamosConInteres / nCuotas
       : 0;
 
+  const labelPayment = (p: string) => {
+    switch (p) {
+      case "contado":
+        return "Contado";
+      case "anticipo_financiacion":
+        return "Anticipo + Financiación";
+      default:
+        return "-";
+    }
+  };
+
+  const handlePaymentTypeChange = (
+    value: "" | "contado" | "anticipo_financiacion"
+  ) => {
+    setErrors({ tradeIn: "", prendario: "", financiacion: "" });
+    setForm((prev) => ({
+      ...prev,
+      paymentType: value,
+      ...(value === "contado"
+        ? {
+            downPayment: "",
+            montoPrendario: "",
+            montoPersonal: "",
+            montoFinanciacion: "",
+            installments: "",
+          }
+        : {}),
+    }));
+  };
+
+  const handleSaveBudget = async () => {
+    if (!clientId || !selectedVehicle) {
+      alert(
+        "Debe seleccionar un cliente y un vehículo antes de generar el presupuesto."
+      );
+      return;
+    }
+
+    if (
+      form.paymentType === "anticipo_financiacion" &&
+      !form.installments
+    ) {
+      setAlert({
+        open: true,
+        message: "Debe seleccionar la cantidad de cuotas.",
+        severity: "warning",
+      });
+      return;
+    }
+
+    // Validación de composición global solo para Anticipo + Financiación
+    if (form.paymentType === "anticipo_financiacion") {
+      const vehiclePriceLocal = Number(selectedVehicle.price) || 0;
+      const totalCompositionLocal =
+        (Number(form.downPayment) || 0) +
+        (form.hasTradeIn ? Number(form.tradeInValue) || 0 : 0) +
+        (Number(form.montoPrendario) || 0) +
+        (Number(form.montoPersonal) || 0) +
+        (Number(form.montoFinanciacion) || 0);
+
+      const diffLocal = Math.abs(totalCompositionLocal - vehiclePriceLocal);
+
+      if (diffLocal > 1) {
+        setAlert({
+          open: true,
+          message: `La suma de anticipo, permuta y financiaciones ($${totalCompositionLocal.toLocaleString(
+            "es-AR"
+          )}) debe coincidir con el precio del vehículo ($${vehiclePriceLocal.toLocaleString(
+            "es-AR"
+          )}). Revise los importes.`,
+          severity: "warning",
+        });
+        return;
+      }
+    }
+
+    const user = JSON.parse(localStorage.getItem("user") || "null");
+    const sellerId = user?.id || null;
+
+    const payload = {
+      vehicleId: Number(selectedVehicle?.id) || null,
+      clientId: Number(clientId) || null,
+      sellerId,
+      paymentType: form.paymentType || null,
+      installments: form.installments ? Number(form.installments) : null,
+      price: Number(selectedVehicle.price),
+      finalPrice: Number(form.finalPrice),
+      installmentValue: Number(form.installmentValue) || 0,
+      downPayment: Number(form.downPayment) || 0,
+      hasTradeIn: !!form.hasTradeIn,
+      tradeInValue: Number(form.tradeInValue) || 0,
+      tradeInPlate: form.tradeInPlate.trim() || null,
+      montoPrendario: Number(form.montoPrendario) || 0,
+      montoPersonal: Number(form.montoPersonal) || 0,
+      montoFinanciacion: Number(form.montoFinanciacion) || 0,
+    };
+
+    try {
+      const res = await api.post("/budgets", payload, {
+        headers: { "Content-Type": "application/json" },
+      });
+      const newBudget = res.data;
+
+      const pdfUrl = `${import.meta.env.VITE_API_URL}/budgets/${newBudget.id}/pdf`;
+      const response = await fetch(pdfUrl);
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const fileName = `Presupuesto-${(form.clientName || "cliente")
+        .replace(/\s+/g, "_")
+        .replace(/[^\w\-]/g, "")}-${newBudget.id}.pdf`;
+
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = fileName;
+      link.click();
+      window.open(url, "_blank");
+      window.URL.revokeObjectURL(url);
+
+      setAlert({
+        open: true,
+        message: "Presupuesto generado y descargado correctamente.",
+        severity: "success",
+      });
+      setPreviewOpen(false);
+    } catch (err: any) {
+      console.error("❌ Error guardando presupuesto:", err);
+      alert(
+        `Error guardando presupuesto: ${err?.response?.status} - ${
+          err?.response?.data?.message || "sin mensaje"
+        }`
+      );
+    }
+  };
+
   return (
     <Box>
       <Typography variant="h5" sx={{ mb: 3, fontWeight: 600 }}>
-        Crear Presupuesto
+        Generar Presupuesto
       </Typography>
 
       <Paper
@@ -528,7 +583,24 @@ const Budgets: React.FC = () => {
           boxShadow: "0px 4px 12px rgba(0,0,0,0.4)",
         }}
       >
+        {/* FORMULARIO (dos columnas) - MISMO ORDEN QUE VENTAS */}
         <Box display="grid" gridTemplateColumns="repeat(2, 1fr)" gap={2}>
+          {/* Cliente */}
+          <TextField
+            label="DNI del Cliente"
+            value={form.dni}
+            onChange={handleDniChange}
+            fullWidth
+            sx={{ input: { color: "#fff" }, label: { color: "#ccc" } }}
+          />
+          <TextField
+            label="Nombre del Cliente"
+            value={form.clientName}
+            InputProps={{ readOnly: true }}
+            fullWidth
+            sx={{ input: { color: "#fff" }, label: { color: "#ccc" } }}
+          />
+
           {/* Vehículo */}
           <TextField
             select
@@ -539,7 +611,7 @@ const Budgets: React.FC = () => {
             sx={{ input: { color: "#fff" }, label: { color: "#ccc" } }}
           >
             {vehicles.map((v) => (
-              <MenuItem key={v.id} value={v.id}>
+              <MenuItem key={v.id} value={String(v.id)}>
                 {v.brand} {v.model} {v.versionName || ""} (
                 {v.plate || "sin patente"})
               </MenuItem>
@@ -549,23 +621,6 @@ const Budgets: React.FC = () => {
           <TextField
             label="Precio Base"
             value={form.price}
-            InputProps={{ readOnly: true }}
-            fullWidth
-            sx={{ input: { color: "#fff" }, label: { color: "#ccc" } }}
-          />
-
-          {/* Cliente */}
-          <TextField
-            label="DNI del Cliente"
-            value={form.dni}
-            onChange={handleDniChange}
-            fullWidth
-            sx={{ input: { color: "#fff" }, label: { color: "#ccc" } }}
-          />
-
-          <TextField
-            label="Nombre del Cliente"
-            value={form.clientName}
             InputProps={{ readOnly: true }}
             fullWidth
             sx={{ input: { color: "#fff" }, label: { color: "#ccc" } }}
@@ -588,6 +643,9 @@ const Budgets: React.FC = () => {
             label="¿Tiene Permuta?"
           />
 
+          {/* hueco para mantener grilla alineada */}
+          <Box />
+
           {form.hasTradeIn && (
             <>
               <TextField
@@ -605,7 +663,6 @@ const Budgets: React.FC = () => {
                 helperText={errors.tradeIn}
                 sx={{ input: { color: "#fff" }, label: { color: "#ccc" } }}
               />
-
               <TextField
                 label="Saldo (Vehículo - Permuta)"
                 value={form.balance}
@@ -622,28 +679,51 @@ const Budgets: React.FC = () => {
             label="Forma de Pago"
             value={form.paymentType}
             onChange={(e) =>
-              setForm((prev) => ({
-                ...prev,
-                paymentType: e.target.value,
-              }))
+              handlePaymentTypeChange(
+                e.target.value as "" | "contado" | "anticipo_financiacion"
+              )
             }
             fullWidth
             sx={{ input: { color: "#fff" }, label: { color: "#ccc" } }}
           >
             <MenuItem value="contado">Contado</MenuItem>
-            <MenuItem value="anticipo_prendario">
-              Anticipo + Préstamo Prendario
-            </MenuItem>
-            <MenuItem value="anticipo_prendario_personal">
-              Anticipo + Prendario + Personal
-            </MenuItem>
-            <MenuItem value="anticipo_prendario_financiacion">
-              Anticipo + Prendario + Personal + Financiación
+            <MenuItem value="anticipo_financiacion">
+              Anticipo + Financiación
             </MenuItem>
           </TextField>
 
+          {/* Cuotas (solo Anticipo + Financiación) */}
+          {requiresInstallments && (
+            <TextField
+              select
+              required
+              label="Cantidad de Cuotas"
+              value={form.installments}
+              onChange={(e) =>
+                setForm((prev) => ({
+                  ...prev,
+                  installments: e.target.value,
+                }))
+              }
+              error={missingInstallments}
+              helperText={
+                missingInstallments
+                  ? "Debe seleccionar la cantidad de cuotas."
+                  : " "
+              }
+              fullWidth
+              sx={{ input: { color: "#fff" }, label: { color: "#ccc" } }}
+            >
+              {Array.from({ length: 36 }, (_, i) => i + 1).map((q) => (
+                <MenuItem key={q} value={q}>
+                  {q} cuotas
+                </MenuItem>
+              ))}
+            </TextField>
+          )}
+
           {/* Anticipo */}
-          {form.paymentType !== "contado" && (
+          {form.paymentType === "anticipo_financiacion" && (
             <TextField
               label="Anticipo"
               type="number"
@@ -659,8 +739,11 @@ const Budgets: React.FC = () => {
             />
           )}
 
-          {/* Préstamos */}
-          {form.paymentType.includes("prendario") && (
+          {/* hueco para alinear grilla */}
+          {form.paymentType === "anticipo_financiacion" && <Box />}
+
+          {/* Préstamo Prendario */}
+          {form.paymentType === "anticipo_financiacion" && (
             <TextField
               label="Monto Préstamo Prendario (neto)"
               type="number"
@@ -678,26 +761,25 @@ const Budgets: React.FC = () => {
             />
           )}
 
-{["anticipo_prendario_personal", "anticipo_prendario_financiacion"].includes(
-  form.paymentType
-) && (
-  <TextField
-    label="Monto Préstamo Personal (neto)"
-    type="number"
-    value={form.montoPersonal}
-    onChange={(e) =>
-      setForm((prev) => ({
-        ...prev,
-        montoPersonal: e.target.value,
-      }))
-    }
-    fullWidth
-    sx={{ input: { color: "#fff" }, label: { color: "#ccc" } }}
-  />
-)}
+          {/* Préstamo Personal */}
+          {form.paymentType === "anticipo_financiacion" && (
+            <TextField
+              label="Monto Préstamo Personal (neto)"
+              type="number"
+              value={form.montoPersonal}
+              onChange={(e) =>
+                setForm((prev) => ({
+                  ...prev,
+                  montoPersonal: e.target.value,
+                }))
+              }
+              fullWidth
+              sx={{ input: { color: "#fff" }, label: { color: "#ccc" } }}
+            />
+          )}
 
-
-          {form.paymentType.includes("financiacion") && (
+          {/* Financiación Personal */}
+          {form.paymentType === "anticipo_financiacion" && (
             <TextField
               label="Monto Financiación Personal (neto)"
               type="number"
@@ -714,30 +796,18 @@ const Budgets: React.FC = () => {
               sx={{ input: { color: "#fff" }, label: { color: "#ccc" } }}
             />
           )}
-
-          {/* Cuotas */}
-          {form.paymentType !== "contado" && (
-            <TextField
-              select
-              label="Cantidad de Cuotas"
-              value={form.installments}
-              onChange={(e) =>
-                setForm((prev) => ({
-                  ...prev,
-                  installments: e.target.value,
-                }))
-              }
-              fullWidth
-              sx={{ input: { color: "#fff" }, label: { color: "#ccc" } }}
-            >
-              {[12, 24, 36].map((q) => (
-                <MenuItem key={q} value={q}>
-                  {q} cuotas
-                </MenuItem>
-              ))}
-            </TextField>
-          )}
         </Box>
+
+        {compositionMismatch && (
+          <Box mt={2}>
+            <Typography color="warning.main" variant="body2">
+              La suma de anticipo, permuta y financiaciones (
+              {formatPesos(totalComposition)}) no coincide con el precio del
+              vehículo ({formatPesos(vehiclePrice)}). Ajuste los importes para
+              continuar.
+            </Typography>
+          </Box>
+        )}
 
         <Box mt={3} textAlign="right">
           <Button
@@ -745,14 +815,20 @@ const Budgets: React.FC = () => {
             color="primary"
             sx={{ borderRadius: 2 }}
             onClick={() => setPreviewOpen(true)}
-            disabled={!form.vehicleId || hasErrors}
+            disabled={
+              !form.vehicleId ||
+              !clientId ||
+              hasErrors ||
+              missingInstallments ||
+              compositionMismatch
+            }
           >
             Previsualizar
           </Button>
         </Box>
       </Paper>
 
-      {/* Dialog de previsualización */}
+      {/* Diálogo de previsualización */}
       <Dialog
         open={previewOpen}
         onClose={() => setPreviewOpen(false)}
@@ -761,137 +837,147 @@ const Budgets: React.FC = () => {
       >
         <DialogTitle>Previsualización del Presupuesto</DialogTitle>
         <DialogContent>
-          <Typography>Cliente: {form.clientName}</Typography>
+          <Typography>Cliente: {form.clientName || "-"}</Typography>
+          <Typography>DNI: {form.dni || "-"}</Typography>
           <Typography>
-            Vehículo: {selectedVehicle?.brand} {selectedVehicle?.model}{" "}
-            {selectedVehicle?.versionName || ""}
+            Vehículo:{" "}
+            {selectedVehicle
+              ? `${selectedVehicle.brand} ${selectedVehicle.model} ${
+                  selectedVehicle.versionName || ""
+                }`
+              : "-"}
           </Typography>
-          <Typography>Forma de pago: {form.paymentType || "-"}</Typography>
-          {form.installments && (
-            <Typography>Cuotas: {form.installments}</Typography>
-          )}
-          {form.downPayment && (
-            <Typography>Anticipo: {formatPesos(form.downPayment)}</Typography>
-          )}
+          <Typography>
+            Forma de pago: {labelPayment(form.paymentType)}
+          </Typography>
+          {form.paymentType === "anticipo_financiacion" &&
+            form.installments && (
+              <Typography>Cuotas: {form.installments}</Typography>
+            )}
+          {form.paymentType === "anticipo_financiacion" &&
+            form.downPayment && (
+              <Typography>Anticipo: {formatPesos(form.downPayment)}</Typography>
+            )}
           {form.hasTradeIn && form.tradeInValue && (
             <Typography>Permuta: {formatPesos(form.tradeInValue)}</Typography>
           )}
 
-          {/* Valor de cuota total con financiación real */}
-          {valorCuotaTotalConInteres > 0 && (
-            <Typography>
-              Valor de Cuota total (con financiación):{" "}
-              {formatPesos(valorCuotaTotalConInteres)}
-            </Typography>
-          )}
-
-          {(form.montoPrendario ||
-            form.montoPersonal ||
-            form.montoFinanciacion) && (
-            <Box sx={{ mt: 2 }}>
-              <Typography variant="h6" sx={{ color: "#009879", mb: 1 }}>
-                Detalle de Préstamos y Financiaciones
+          {/* Valor de cuota total con financiación */}
+          {form.paymentType === "anticipo_financiacion" &&
+            valorCuotaTotalConInteres > 0 && (
+              <Typography>
+                Valor de Cuota total (con financiación):{" "}
+                {formatPesos(valorCuotaTotalConInteres)}
               </Typography>
+            )}
 
-              {/* Préstamo Prendario */}
-              {netoPrendario > 0 && (
-                <Paper sx={{ p: 2, mb: 1, backgroundColor: "#f9f9f9" }}>
-                  <Typography
-                    variant="subtitle1"
-                    sx={{ color: "#009879" }}
-                  >
-                    Préstamo Prendario
-                  </Typography>
-                  <Typography sx={{ color: "#000" }}>
-                    Monto (neto): {formatPesos(netoPrendario)}
-                  </Typography>
-                  <Typography sx={{ color: "#000" }}>
-                    Tasa aplicada: {tasaPrendario}%
-                  </Typography>
-                  <Typography sx={{ color: "#000" }}>
-                    Cuotas: {form.installments || "-"}
-                  </Typography>
-                  <Typography sx={{ color: "#000" }}>
-                    Valor de cada cuota (con financiación):{" "}
-                    {nCuotas > 0
-                      ? formatPesos(prendarioConInteres / nCuotas)
-                      : "-"}
-                  </Typography>
-                </Paper>
-              )}
+          {/* Detalle de préstamos */}
+          {form.paymentType === "anticipo_financiacion" &&
+            (netoPrendario || netoPersonal || netoFinanciacion) && (
+              <Box sx={{ mt: 2 }}>
+                <Typography
+                  variant="h6"
+                  sx={{ color: "#009879", mb: 1 }}
+                >
+                  Detalle de Préstamos y Financiaciones
+                </Typography>
 
-              {/* Préstamo Personal */}
-              {netoPersonal > 0 && (
-                <Paper sx={{ p: 2, mb: 1, backgroundColor: "#f9f9f9" }}>
-                  <Typography
-                    variant="subtitle1"
-                    sx={{ color: "#009879" }}
-                  >
-                    Préstamo Personal
-                  </Typography>
-                  <Typography sx={{ color: "#000" }}>
-                    Monto (neto): {formatPesos(netoPersonal)}
-                  </Typography>
-                  <Typography sx={{ color: "#000" }}>
-                    Tasa aplicada: {tasaPersonal}%
-                  </Typography>
-                  <Typography sx={{ color: "#000" }}>
-                    Cuotas: {form.installments || "-"}
-                  </Typography>
-                  <Typography sx={{ color: "#000" }}>
-                    Valor de cada cuota (con financiación):{" "}
-                    {nCuotas > 0
-                      ? formatPesos(personalConInteres / nCuotas)
-                      : "-"}
-                  </Typography>
-                </Paper>
-              )}
+                {netoPrendario > 0 && (
+                  <Paper sx={{ p: 2, mb: 1, backgroundColor: "#f9f9f9" }}>
+                    <Typography
+                      variant="subtitle1"
+                      sx={{ color: "#009879" }}
+                    >
+                      Préstamo Prendario
+                    </Typography>
+                    <Typography sx={{ color: "#000" }}>
+                      Monto (neto): {formatPesos(netoPrendario)}
+                    </Typography>
+                    <Typography sx={{ color: "#000" }}>
+                      Tasa aplicada: {tasaPrendario}%
+                    </Typography>
+                    <Typography sx={{ color: "#000" }}>
+                      Cuotas: {form.installments || "-"}
+                    </Typography>
+                    <Typography sx={{ color: "#000" }}>
+                      Valor de cada cuota (con financiación):{" "}
+                      {nCuotas > 0
+                        ? formatPesos(prendarioConInteres / nCuotas)
+                        : "-"}
+                    </Typography>
+                  </Paper>
+                )}
 
-              {/* Financiación Personal */}
-              {netoFinanciacion > 0 && (
-                <Paper sx={{ p: 2, mb: 1, backgroundColor: "#f9f9f9" }}>
-                  <Typography
-                    variant="subtitle1"
-                    sx={{ color: "#009879" }}
-                  >
-                    Financiación Personal
-                  </Typography>
-                  <Typography sx={{ color: "#000" }}>
-                    Monto (neto): {formatPesos(netoFinanciacion)}
-                  </Typography>
-                  <Typography sx={{ color: "#000" }}>
-                    Tasa aplicada: {tasaFinanciacion}%
-                  </Typography>
-                  <Typography sx={{ color: "#000" }}>
-                    Cuotas: {form.installments || "-"}
-                  </Typography>
-                  <Typography sx={{ color: "#000" }}>
-                    Valor de cada cuota (con financiación):{" "}
-                    {nCuotas > 0
-                      ? formatPesos(
-                          financiacionConInteres / nCuotas
-                        )
-                      : "-"}
-                  </Typography>
-                </Paper>
-              )}
-            </Box>
-          )}
+                {netoPersonal > 0 && (
+                  <Paper sx={{ p: 2, mb: 1, backgroundColor: "#f9f9f9" }}>
+                    <Typography
+                      variant="subtitle1"
+                      sx={{ color: "#009879" }}
+                    >
+                      Préstamo Personal
+                    </Typography>
+                    <Typography sx={{ color: "#000" }}>
+                      Monto (neto): {formatPesos(netoPersonal)}
+                    </Typography>
+                    <Typography sx={{ color: "#000" }}>
+                      Tasa aplicada: {tasaPersonal}%
+                    </Typography>
+                    <Typography sx={{ color: "#000" }}>
+                      Cuotas: {form.installments || "-"}
+                    </Typography>
+                    <Typography sx={{ color: "#000" }}>
+                      Valor de cada cuota (con financiación):{" "}
+                      {nCuotas > 0
+                        ? formatPesos(personalConInteres / nCuotas)
+                        : "-"}
+                    </Typography>
+                  </Paper>
+                )}
+
+                {netoFinanciacion > 0 && (
+                  <Paper sx={{ p: 2, mb: 1, backgroundColor: "#f9f9f9" }}>
+                    <Typography
+                      variant="subtitle1"
+                      sx={{ color: "#009879" }}
+                    >
+                      Financiación Personal
+                    </Typography>
+                    <Typography sx={{ color: "#000" }}>
+                      Monto (neto): {formatPesos(netoFinanciacion)}
+                    </Typography>
+                    <Typography sx={{ color: "#000" }}>
+                      Tasa aplicada: {tasaFinanciacion}%
+                    </Typography>
+                    <Typography sx={{ color: "#000" }}>
+                      Cuotas: {form.installments || "-"}
+                    </Typography>
+                    <Typography sx={{ color: "#000" }}>
+                      Valor de cada cuota (con financiación):{" "}
+                      {nCuotas > 0
+                        ? formatPesos(financiacionConInteres / nCuotas)
+                        : "-"}
+                    </Typography>
+                  </Paper>
+                )}
+              </Box>
+            )}
 
           <Box textAlign="center" mt={3}>
             <Button
               variant="contained"
               color="primary"
               sx={{ mr: 2 }}
-              onClick={async () => {
-                await handleSaveBudget();
-                setPreviewOpen(false);
-              }}
-              disabled={hasErrors}
+              onClick={handleSaveBudget}
+              disabled={
+                !clientId ||
+                !selectedVehicle ||
+                hasErrors ||
+                missingInstallments ||
+                compositionMismatch
+              }
             >
-              Guardar y Descargar PDF
+              Generar y Descargar PDF
             </Button>
-
             <Button
               variant="outlined"
               color="secondary"
@@ -912,7 +998,7 @@ const Budgets: React.FC = () => {
       >
         <Alert
           onClose={() => setAlert({ ...alert, open: false })}
-          severity={alert.severity as any}
+          severity={alert.severity}
           sx={{ width: "100%" }}
         >
           {alert.message}

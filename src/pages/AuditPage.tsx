@@ -17,6 +17,8 @@ import {
   TablePagination,
   IconButton,
   Stack,
+  Chip,
+  Tooltip,
 } from "@mui/material";
 import VisibilityIcon from "@mui/icons-material/Visibility";
 import { getAuditLogs } from "../api/auditApi";
@@ -25,7 +27,108 @@ import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
-export default function AuditPage() {
+// 🔹 Formatea fecha/hora en horario de Argentina
+const formatDateTimeAr = (value: string | Date | null | undefined) => {
+  if (!value) return "-";
+  const date = new Date(value);
+  return date.toLocaleString("es-AR", {
+    timeZone: "America/Argentina/Buenos_Aires",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+};
+
+// 🔹 Mapea verbo HTTP a etiqueta de negocio + color
+const getActionChip = (httpVerb: string | undefined) => {
+  const verb = (httpVerb || "").toUpperCase();
+  switch (verb) {
+    case "POST":
+      return { label: "Alta", color: "success" as const };
+    case "PUT":
+    case "PATCH":
+      return { label: "Modificación", color: "warning" as const };
+    case "DELETE":
+      return { label: "Eliminación", color: "error" as const };
+    case "GET":
+      return { label: "Consulta", color: "info" as const };
+    default:
+      return { label: verb || "N/D", color: "default" as const };
+  }
+};
+
+// 🔹 Mapea el campo module ("Sales → /api/sales → create()") a entidad de negocio
+const parseModuleInfo = (rawModule: string | null | undefined) => {
+  if (!rawModule) {
+    return {
+      entityKey: "",
+      entityLabel: "-",
+      raw: "",
+    };
+  }
+
+  const parts = rawModule
+    .split("→")
+    .map((p) => p.trim())
+    .filter(Boolean);
+
+  const area = parts[0] || rawModule;
+
+  const map: Record<string, string> = {
+    Vehicles: "Vehículos",
+    Clients: "Clientes",
+    Budgets: "Presupuestos",
+    Reservations: "Reservas",
+    Sales: "Ventas",
+    Installments: "Pagos / Cuotas",
+    Settings: "Configuración",
+    Audit: "Auditoría",
+  };
+
+  const entityLabel = map[area] || area;
+
+  return {
+    entityKey: area,
+    entityLabel,
+    raw: rawModule,
+  };
+};
+
+// 🔹 Genera una descripción simple, tipo "Alta de presupuesto"
+const buildBusinessDescription = (log: any, entityLabel: string): string => {
+  const http = (log?.action || "").toUpperCase();
+
+  const singularMap: Record<string, string> = {
+    "Vehículos": "vehículo",
+    "Clientes": "cliente",
+    "Presupuestos": "presupuesto",
+    "Reservas": "reserva",
+    "Ventas": "venta",
+    "Pagos / Cuotas": "pago/cuota",
+    "Configuración": "configuración",
+    "Auditoría": "auditoría",
+  };
+
+  const entitySingular =
+    singularMap[entityLabel] || entityLabel.toLowerCase();
+
+  const prefixMap: Record<string, string> = {
+    POST: "Alta de",
+    PUT: "Modificación de",
+    PATCH: "Modificación de",
+    DELETE: "Eliminación de",
+    GET: "Consulta de",
+  };
+
+  const prefix = prefixMap[http] || "Operación sobre";
+
+  return `${prefix} ${entitySingular}`;
+};
+
+const AuditPage: React.FC = () => {
   const [rows, setRows] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);
   const [page, setPage] = useState(0); // 0-based
@@ -42,7 +145,6 @@ export default function AuditPage() {
   const [openDetail, setOpenDetail] = useState(false);
   const [selectedLog, setSelectedLog] = useState<any>(null);
 
-  // Parámetros para API
   const params = useMemo(
     () => ({
       page: page + 1,
@@ -62,7 +164,6 @@ export default function AuditPage() {
     setRows(res.data);
     setTotal(res.total);
 
-    // Usuarios únicos
     const uniqueUsers = Array.from(
       new Map(res.data.map((l: any) => [l.userId, l.user?.name])).entries()
     )
@@ -86,12 +187,14 @@ export default function AuditPage() {
   ]);
 
   const handleChangePage = (_: unknown, newPage: number) => setPage(newPage);
-  const handleChangeRowsPerPage = (e: React.ChangeEvent<HTMLInputElement>) => {
+
+  const handleChangeRowsPerPage = (
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
     setLimit(parseInt(e.target.value, 10));
     setPage(0);
   };
 
-  // Obtener todos los registros filtrados para exportación
   const fetchAllFiltered = async () => {
     const res = await getAuditLogs({ ...params, page: 1, limit: 10000 });
     return res.data as any[];
@@ -104,7 +207,7 @@ export default function AuditPage() {
       Acción: log.action,
       Módulo: log.module,
       IP: log.ip || "",
-      Fecha: new Date(log.createdAt).toLocaleString(),
+      Fecha: formatDateTimeAr(log.createdAt),
     }));
 
     const ws = XLSX.utils.json_to_sheet(rows);
@@ -120,7 +223,7 @@ export default function AuditPage() {
       Accion: log.action,
       Modulo: log.module,
       IP: log.ip || "",
-      Fecha: new Date(log.createdAt).toLocaleString(),
+      Fecha: formatDateTimeAr(log.createdAt),
     }));
 
     const ws = XLSX.utils.json_to_sheet(rows);
@@ -146,7 +249,7 @@ export default function AuditPage() {
       log.action,
       log.module,
       log.ip || "",
-      new Date(log.createdAt).toLocaleString(),
+      formatDateTimeAr(log.createdAt),
     ]);
 
     autoTable(doc, {
@@ -196,7 +299,7 @@ export default function AuditPage() {
           </TextField>
 
           <TextField
-            label="Acción"
+            label="Tipo de operación"
             select
             value={filterAction}
             onChange={(e) => {
@@ -206,14 +309,14 @@ export default function AuditPage() {
             sx={{ bgcolor: "#2a2a40" }}
           >
             <MenuItem value="">Todas</MenuItem>
-            <MenuItem value="GET">GET</MenuItem>
-            <MenuItem value="POST">POST</MenuItem>
-            <MenuItem value="PUT">PUT</MenuItem>
-            <MenuItem value="DELETE">DELETE</MenuItem>
+            <MenuItem value="GET">Consulta</MenuItem>
+            <MenuItem value="POST">Alta</MenuItem>
+            <MenuItem value="PUT">Modificación</MenuItem>
+            <MenuItem value="DELETE">Eliminación</MenuItem>
           </TextField>
 
           <TextField
-            label="Módulo"
+            label="Módulo (ej. Sales, Vehicles...)"
             value={filterModule}
             onChange={(e) => {
               setFilterModule(e.target.value);
@@ -311,8 +414,9 @@ export default function AuditPage() {
             <TableHead>
               <TableRow>
                 <TableCell sx={{ color: "#fff" }}>Usuario</TableCell>
-                <TableCell sx={{ color: "#fff" }}>Acción</TableCell>
-                <TableCell sx={{ color: "#fff" }}>Módulo</TableCell>
+                <TableCell sx={{ color: "#fff" }}>Operación</TableCell>
+                <TableCell sx={{ color: "#fff" }}>Entidad</TableCell>
+                <TableCell sx={{ color: "#fff" }}>Descripción</TableCell>
                 <TableCell sx={{ color: "#fff" }}>IP</TableCell>
                 <TableCell sx={{ color: "#fff" }}>Fecha</TableCell>
                 <TableCell sx={{ color: "#fff", textAlign: "center" }}>
@@ -322,40 +426,67 @@ export default function AuditPage() {
             </TableHead>
 
             <TableBody>
-              {rows.map((log) => (
-                <TableRow key={log.id} hover>
-                  <TableCell sx={{ color: "#ccc" }}>
-                    {log.user?.name}
-                  </TableCell>
-                  <TableCell sx={{ color: "#ccc" }}>{log.action}</TableCell>
-                  <TableCell sx={{ color: "#ccc" }}>{log.module}</TableCell>
-                  <TableCell sx={{ color: "#ccc" }}>{log.ip}</TableCell>
-                  <TableCell sx={{ color: "#ccc" }}>
-                    {new Date(log.createdAt).toLocaleString()}
-                  </TableCell>
+              {rows.map((log) => {
+                const { entityLabel } = parseModuleInfo(log.module);
+                const chip = getActionChip(log.action);
+                const description = buildBusinessDescription(
+                  log,
+                  entityLabel
+                );
 
-                  {/* ✅ Botón detalle mejorado */}
-                  <TableCell sx={{ textAlign: "center" }}>
-                    <IconButton
-                      onClick={() => {
-                        setSelectedLog(log);
-                        setOpenDetail(true);
-                      }}
-                      size="small"
-                      sx={{
-                        color: "#00bfa5",
-                        "&:hover": { color: "#00d9b8" },
-                      }}
-                    >
-                      <VisibilityIcon />
-                    </IconButton>
-                  </TableCell>
-                </TableRow>
-              ))}
+                return (
+                  <TableRow key={log.id} hover>
+                    <TableCell sx={{ color: "#ccc" }}>
+                      {log.user?.name}
+                    </TableCell>
+
+                    <TableCell sx={{ color: "#ccc" }}>
+                      <Chip
+                        label={chip.label}
+                        color={chip.color}
+                        size="small"
+                        variant="outlined"
+                      />
+                    </TableCell>
+
+                    <TableCell sx={{ color: "#ccc" }}>
+                      {entityLabel}
+                    </TableCell>
+
+                    <TableCell sx={{ color: "#ccc", maxWidth: 320 }}>
+                      <Tooltip title={log.module || ""}>
+                        <span>{description}</span>
+                      </Tooltip>
+                    </TableCell>
+
+                    <TableCell sx={{ color: "#ccc" }}>{log.ip}</TableCell>
+
+                    <TableCell sx={{ color: "#ccc" }}>
+                      {formatDateTimeAr(log.createdAt)}
+                    </TableCell>
+
+                    <TableCell sx={{ textAlign: "center" }}>
+                      <IconButton
+                        onClick={() => {
+                          setSelectedLog(log);
+                          setOpenDetail(true);
+                        }}
+                        size="small"
+                        sx={{
+                          color: "#00bfa5",
+                          "&:hover": { color: "#00d9b8" },
+                        }}
+                      >
+                        <VisibilityIcon />
+                      </IconButton>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
 
               {rows.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={6} sx={{ textAlign: "center", p: 3 }}>
+                  <TableCell colSpan={7} sx={{ textAlign: "center", p: 3 }}>
                     No hay registros
                   </TableCell>
                 </TableRow>
@@ -385,4 +516,6 @@ export default function AuditPage() {
       </CardContent>
     </Card>
   );
-}
+};
+
+export default AuditPage;

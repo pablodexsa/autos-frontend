@@ -48,10 +48,12 @@ const ReservationsPage: React.FC = () => {
   const [client, setClient] = useState<any>(null);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [vehicle, setVehicle] = useState<Vehicle | null>(null);
-  const [amount, setAmount] = useState<number>(600000);
+  // 🔹 Importe de reserva: ahora viene de settings (no fijo)
+  const [amount, setAmount] = useState<number>(0);
   const [guarantors, setGuarantors] = useState<Guarantor[]>([]);
   const [loading, setLoading] = useState(false);
-  const [reservationNumber, setReservationNumber] = useState<number | null>(null);
+  const [reservationNumber, setReservationNumber] =
+    useState<number | null>(null);
 
   const navigate = useNavigate();
   const { id } = useParams();
@@ -71,11 +73,35 @@ const ReservationsPage: React.FC = () => {
     fetchVehicles();
   }, [id]);
 
+  // 🔹 Cargar importe por defecto de reserva desde /settings (solo alta)
+  useEffect(() => {
+    if (id) return; // en edición uso el amount de la reserva
+
+    const fetchReservationAmount = async () => {
+      try {
+        const res = await api.get("/settings/reservations/amount");
+        const v = Number(res.data?.reservationAmount);
+        if (Number.isFinite(v) && v > 0) {
+          setAmount(v);
+        } else {
+          setAmount(600000); // fallback por si no hay configuración
+        }
+      } catch (err) {
+        console.error("Error cargando importe de reserva desde settings:", err);
+        setAmount(600000); // fallback
+      }
+    };
+
+    fetchReservationAmount();
+  }, [id]);
+
   // 👤 Buscar cliente automáticamente por DNI
   const handleFetchClient = async (dniValue: string) => {
     if (!dniValue || dniValue.length < 8) return;
     try {
-      const res = await api.get("/clients/search/by-dni", { params: { dni: dniValue } });
+      const res = await api.get("/clients/search/by-dni", {
+        params: { dni: dniValue },
+      });
       if (res.data && res.data.length > 0) {
         setClient(res.data[0]);
       } else {
@@ -98,6 +124,7 @@ const ReservationsPage: React.FC = () => {
         setDni(r.client?.dni || "");
         setClient(r.client);
         setVehicle(r.vehicle);
+        // en edición respeto el monto que viene de la reserva
         setAmount(Number(r.amount) || 500000);
 
         if (r.guarantors?.length > 0) {
@@ -143,7 +170,11 @@ const ReservationsPage: React.FC = () => {
     setGuarantors(guarantors.filter((_, i) => i !== index));
 
   // ✏️ Actualizar garante
-  const handleGuarantorChange = (index: number, field: keyof Guarantor, value: any) => {
+  const handleGuarantorChange = (
+    index: number,
+    field: keyof Guarantor,
+    value: any
+  ) => {
     const updated = [...guarantors];
     (updated[index] as any)[field] = value;
     setGuarantors(updated);
@@ -152,11 +183,12 @@ const ReservationsPage: React.FC = () => {
   // 📄 Descargar PDF con nombre real desde el backend
   const downloadRealPDF = async (reservationId: string | number) => {
     try {
-      const res = await api.get(`/reservations/${reservationId}/pdf`, { responseType: "blob" });
+      const res = await api.get(`/reservations/${reservationId}/pdf`, {
+        responseType: "blob",
+      });
       const blob = new Blob([res.data], { type: "application/pdf" });
       const url = window.URL.createObjectURL(blob);
 
-      // Extraer nombre real desde el header Content-Disposition
       const disposition = res.headers["content-disposition"];
       let fileName = `Reserva-${reservationId}.pdf`;
       if (disposition && disposition.includes("filename=")) {
@@ -164,7 +196,6 @@ const ReservationsPage: React.FC = () => {
         if (match && match[1]) fileName = decodeURIComponent(match[1]);
       }
 
-      // Descarga automática
       const link = document.createElement("a");
       link.href = url;
       link.download = fileName;
@@ -177,15 +208,17 @@ const ReservationsPage: React.FC = () => {
     }
   };
 
-  // 💾 Guardar o actualizar reserva (sin alertas)
+  // 💾 Guardar o actualizar reserva
   const handleSubmit = async () => {
-    if (!client || !vehicle) return alert("⚠️ Debes completar cliente y vehículo primero.");
+    if (!client || !vehicle)
+      return alert("⚠️ Debes completar cliente y vehículo primero.");
 
     try {
       setLoading(true);
       let reservationId = id;
 
       if (id) {
+        // 🔹 Edición: mantengo el seller original (no lo piso)
         await api.patch(`/reservations/${id}`, {
           clientDni: client.dni,
           plate: vehicle.plate,
@@ -210,16 +243,19 @@ const ReservationsPage: React.FC = () => {
 
         await downloadRealPDF(id);
       } else {
+        // 🔹 Alta: sellerId = usuario logueado (como en Sales/Budgets)
+        const user = JSON.parse(localStorage.getItem("user") || "null");
+        const sellerId = user?.id || null;
+
         const res = await api.post("/reservations", {
           clientDni: client.dni,
           plate: vehicle.plate,
           amount,
-          sellerId: 1,
+          sellerId,
         });
 
         reservationId = res.data.id;
 
-        // Subir garantes (si los hay)
         for (const g of guarantors) {
           const formData = new FormData();
           formData.append("firstName", g.firstName);
@@ -234,7 +270,6 @@ const ReservationsPage: React.FC = () => {
           });
         }
 
-        // 🔸 Descargar PDF real con nombre correcto
         await downloadRealPDF(reservationId);
       }
 
@@ -248,7 +283,10 @@ const ReservationsPage: React.FC = () => {
   };
 
   const formatPesos = (num: number) =>
-    new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS" }).format(num);
+    new Intl.NumberFormat("es-AR", {
+      style: "currency",
+      currency: "ARS",
+    }).format(num);
 
   return (
     <Box sx={{ p: 3 }}>
@@ -290,9 +328,13 @@ const ReservationsPage: React.FC = () => {
                 <MenuItem
                   key={v.id}
                   value={v.id}
-                  disabled={v.status !== "available" && (!vehicle || v.id !== vehicle.id)}
+                  disabled={
+                    v.status !== "available" && (!vehicle || v.id !== vehicle.id)
+                  }
                 >
-                  {`${v.brand} ${v.model} ${v.versionName} (${v.plate}) - ${v.status}`}
+                  {`${v.brand} ${v.model} ${v.versionName} (${v.plate}) - ${
+                    v.status
+                  }`}
                 </MenuItem>
               ))}
             </Select>
@@ -320,14 +362,19 @@ const ReservationsPage: React.FC = () => {
         </Typography>
 
         {guarantors.map((g, i) => (
-          <Paper key={i} sx={{ p: 2, mb: 3, background: "#2a2a3b", borderRadius: 2 }}>
+          <Paper
+            key={i}
+            sx={{ p: 2, mb: 3, background: "#2a2a3b", borderRadius: 2 }}
+          >
             <Grid container spacing={2}>
               <Grid item xs={6}>
                 <TextField
                   fullWidth
                   label="Nombre"
                   value={g.firstName}
-                  onChange={(e) => handleGuarantorChange(i, "firstName", e.target.value)}
+                  onChange={(e) =>
+                    handleGuarantorChange(i, "firstName", e.target.value)
+                  }
                   sx={{ input: { color: "#fff" }, label: { color: "#ccc" } }}
                 />
               </Grid>
@@ -336,7 +383,9 @@ const ReservationsPage: React.FC = () => {
                   fullWidth
                   label="Apellido"
                   value={g.lastName}
-                  onChange={(e) => handleGuarantorChange(i, "lastName", e.target.value)}
+                  onChange={(e) =>
+                    handleGuarantorChange(i, "lastName", e.target.value)
+                  }
                   sx={{ input: { color: "#fff" }, label: { color: "#ccc" } }}
                 />
               </Grid>
@@ -346,7 +395,9 @@ const ReservationsPage: React.FC = () => {
                   fullWidth
                   label="DNI"
                   value={g.dni}
-                  onChange={(e) => handleGuarantorChange(i, "dni", e.target.value)}
+                  onChange={(e) =>
+                    handleGuarantorChange(i, "dni", e.target.value)
+                  }
                   sx={{ input: { color: "#fff" }, label: { color: "#ccc" } }}
                 />
               </Grid>
@@ -355,7 +406,9 @@ const ReservationsPage: React.FC = () => {
                   fullWidth
                   label="Domicilio"
                   value={g.address}
-                  onChange={(e) => handleGuarantorChange(i, "address", e.target.value)}
+                  onChange={(e) =>
+                    handleGuarantorChange(i, "address", e.target.value)
+                  }
                   sx={{ input: { color: "#fff" }, label: { color: "#ccc" } }}
                 />
               </Grid>
@@ -364,7 +417,9 @@ const ReservationsPage: React.FC = () => {
                   fullWidth
                   label="Teléfono"
                   value={g.phone}
-                  onChange={(e) => handleGuarantorChange(i, "phone", e.target.value)}
+                  onChange={(e) =>
+                    handleGuarantorChange(i, "phone", e.target.value)
+                  }
                   sx={{ input: { color: "#fff" }, label: { color: "#ccc" } }}
                 />
               </Grid>
@@ -391,7 +446,11 @@ const ReservationsPage: React.FC = () => {
                   type="file"
                   accept="image/*,.pdf"
                   onChange={(e) =>
-                    handleGuarantorChange(i, "dniFile", e.target.files ? e.target.files[0] : null)
+                    handleGuarantorChange(
+                      i,
+                      "dniFile",
+                      e.target.files ? e.target.files[0] : null
+                    )
                   }
                 />
               </Grid>
@@ -437,12 +496,22 @@ const ReservationsPage: React.FC = () => {
           </Paper>
         ))}
 
-        <Button startIcon={<AddIcon />} variant="outlined" color="secondary" onClick={handleAddGuarantor}>
+        <Button
+          startIcon={<AddIcon />}
+          variant="outlined"
+          color="secondary"
+          onClick={handleAddGuarantor}
+        >
           Agregar garante
         </Button>
 
         <Box textAlign="right" mt={4}>
-          <Button variant="contained" color="primary" disabled={loading} onClick={handleSubmit}>
+          <Button
+            variant="contained"
+            color="primary"
+            disabled={loading}
+            onClick={handleSubmit}
+          >
             {loading ? "Guardando..." : id ? "Actualizar Reserva" : "Guardar Reserva"}
           </Button>
         </Box>

@@ -47,6 +47,7 @@ interface Reservation {
   date: string;
   status: string;
   guarantors?: Guarantor[];
+  sellerName?: string; // viene del backend
 }
 
 const ReservationListPage: React.FC = () => {
@@ -55,7 +56,11 @@ const ReservationListPage: React.FC = () => {
   const [openGuarantors, setOpenGuarantors] = useState(false);
   const [selectedGuarantors, setSelectedGuarantors] = useState<Guarantor[]>([]);
   const [selectedReservationId, setSelectedReservationId] = useState<number | null>(null);
-  const [alert, setAlert] = useState<{ open: boolean; msg: string; type: "success" | "error" }>({
+  const [alert, setAlert] = useState<{
+    open: boolean;
+    msg: string;
+    type: "success" | "error";
+  }>({
     open: false,
     msg: "",
     type: "success",
@@ -67,7 +72,7 @@ const ReservationListPage: React.FC = () => {
   const fetchReservations = async () => {
     setLoading(true);
     try {
-      const res = await api.get("/reservations");
+      const res = await api.get<Reservation[]>("/reservations");
       setReservations(res.data);
     } catch (error) {
       console.error("Error al cargar reservas:", error);
@@ -141,7 +146,7 @@ const ReservationListPage: React.FC = () => {
     setSelectedReservationId(null);
   };
 
-  // 🔹 Forzar expiración de reservas
+  // 🔹 Forzar expiración de reservas (usa tu endpoint /reservations/expire)
   const handleForceExpire = async () => {
     try {
       setLoading(true);
@@ -166,37 +171,36 @@ const ReservationListPage: React.FC = () => {
 
   return (
     <Box sx={{ p: 3 }}>
-      {/* Encabezado con botón Actualizar vencidas */}
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
-        <Typography variant="h4" sx={{ color: "#fff" }}>
+        <Typography variant="h4" sx={{ color: "#fff", fontWeight: 600 }}>
           Listado de Reservas
         </Typography>
-
-        <Button
-          variant="outlined"
-          color="secondary"
-          startIcon={<RefreshIcon />}
-          onClick={handleForceExpire}
-          disabled={loading}
-        >
-          {loading ? <CircularProgress size={20} /> : "Actualizar vencidas"}
-        </Button>
+        <Box display="flex" gap={2}>
+          <Button
+            variant="outlined"
+            startIcon={<RefreshIcon />}
+            onClick={fetchReservations}
+            disabled={loading}
+          >
+            Actualizar
+          </Button>
+          <Button
+            variant="outlined"
+            color="secondary"
+            onClick={handleForceExpire}
+            disabled={loading}
+          >
+            Actualizar vencidas
+          </Button>
+        </Box>
       </Box>
 
       {loading ? (
-        <Box sx={{ textAlign: "center", mt: 5 }}>
+        <Box display="flex" justifyContent="center" mt={4}>
           <CircularProgress />
         </Box>
       ) : (
-        <Paper
-          sx={{
-            p: 2,
-            borderRadius: 3,
-            background: "#2a2a3b",
-            color: "white",
-            boxShadow: "0 2px 10px rgba(0,0,0,0.2)",
-          }}
-        >
+        <Paper sx={{ p: 2, backgroundColor: "#1e1e2f" }}>
           <TableContainer>
             <Table>
               <TableHead>
@@ -207,6 +211,7 @@ const ReservationListPage: React.FC = () => {
                   <TableCell sx={{ color: "#00BFA5", fontWeight: 600 }}>Vehículo</TableCell>
                   <TableCell sx={{ color: "#00BFA5", fontWeight: 600 }}>Fecha</TableCell>
                   <TableCell sx={{ color: "#00BFA5", fontWeight: 600 }}>Estado</TableCell>
+                  <TableCell sx={{ color: "#00BFA5", fontWeight: 600 }}>Vendedor</TableCell>
                   <TableCell sx={{ color: "#00BFA5", fontWeight: 600 }}>Garantes</TableCell>
                   <TableCell align="center" sx={{ color: "#00BFA5", fontWeight: 600 }}>
                     Documentación
@@ -230,7 +235,9 @@ const ReservationListPage: React.FC = () => {
                     <TableCell>{r.clientDni}</TableCell>
                     <TableCell>{r.plate}</TableCell>
                     <TableCell>{r.vehicle}</TableCell>
-                    <TableCell>{new Date(r.date).toLocaleDateString("es-AR")}</TableCell>
+                    <TableCell>
+                      {r.date ? new Date(r.date).toLocaleDateString("es-AR") : "-"}
+                    </TableCell>
                     <TableCell
                       sx={{
                         color:
@@ -243,6 +250,9 @@ const ReservationListPage: React.FC = () => {
                     >
                       {r.status}
                     </TableCell>
+
+                    {/* Vendedor */}
+                    <TableCell>{r.sellerName || "Anónimo"}</TableCell>
 
                     <TableCell>
                       <Button
@@ -364,7 +374,7 @@ const ReservationListPage: React.FC = () => {
       <Snackbar
         open={alert.open}
         autoHideDuration={3000}
-        onClose={() => setAlert({ ...alert, open: false })}
+        onClose={() => setAlert((prev) => ({ ...prev, open: false }))}
         anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
       >
         <Alert severity={alert.type}>{alert.msg}</Alert>

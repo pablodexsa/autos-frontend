@@ -11,5 +11,21 @@ export async function getAuditLogs(params: {
   to?: string;
 } = {}) {
   const res = await api.get("/audit", { params });
-  return res.data; // { data, total, page, lastPage, limit }
+
+  const {
+    data = [],
+    total = 0,
+    page,
+    lastPage,
+    limit,
+  } = res.data || {};
+
+  // Devolvés todo, pero con data/total siempre definidos
+  return {
+    data,
+    total,
+    page,
+    lastPage,
+    limit,
+  };
 }

@@ -209,6 +209,10 @@ const handleSubmitPayment = async () => {
     return c ? `${c.firstName ?? ""} ${c.lastName ?? ""}`.trim() : "";
   };
 
+  const getVehiclePlate = (i: any) => {
+    return i.sale?.vehicle?.plate ?? i.vehicle?.plate ?? "—";
+  };
+
   const isPartiallyPaid = (i: any) => {
     if (i.paid) return false;
     if (i.remainingAmount == null) return false;
@@ -423,6 +427,7 @@ const handleSubmitPayment = async () => {
             <TableRow>
               <TableCell>Cuota</TableCell>
               <TableCell>Cliente</TableCell>
+              <TableCell>Patente</TableCell>
               <TableCell>Monto</TableCell>
               <TableCell>Vencimiento</TableCell>
               <TableCell>Estado</TableCell>
@@ -453,6 +458,7 @@ const handleSubmitPayment = async () => {
                       ? `${i.client.firstName} ${i.client.lastName}`
                       : "—"}
                   </TableCell>
+<TableCell>{i.vehicle?.plate ?? "—"}</TableCell>
                   <TableCell>
                     $
                     {Number(i.currentAmount ?? i.amount ?? 0).toLocaleString()}
