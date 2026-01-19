@@ -325,9 +325,26 @@ export default function VehiclesPage() {
     }
   };
 
-  const handleOpenDocumentation = (id: number) => {
-    window.open(`${API_URL}/vehicles/${id}/documentation`, "_blank");
-  };
+const handleOpenDocumentation = async (id: number) => {
+  try {
+    const resp = await api.get(`/vehicles/${id}/documentation`, {
+      responseType: "blob",
+    });
+
+    const blobUrl = window.URL.createObjectURL(resp.data);
+    window.open(blobUrl, "_blank", "noopener,noreferrer");
+  } catch (err: any) {
+    if (err?.response?.status === 401) {
+      alert("Tu sesión expiró. Volvé a iniciar sesión.");
+    } else if (err?.response?.status === 404) {
+      alert("No se encontró la documentación del vehículo.");
+    } else {
+      alert("Error al abrir la documentación.");
+    }
+    console.error("Error abriendo documentación:", err);
+  }
+};
+
 
   // 👉 NUEVO: abrir modal de NUEVO vehículo reseteando todo el form
   const handleOpenNewVehicleModal = () => {
