@@ -31,10 +31,14 @@ export const permissions = {
   gerencia: [
     "vehicles",
     "clients",
+    "budgets",
     "budget-reports",
+    "reservations",
     "reservation-list",
-    "installments",
+    "sales",
+    "sales-list",
     "installment-payments",
+    "installments",
     "settings",
   ],
 };
