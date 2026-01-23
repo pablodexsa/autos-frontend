@@ -23,6 +23,9 @@ const initialQuery: VehicleQuery = {
   sortOrder: "DESC",
 };
 
+const PROCEDENCIAS = ["Randazzo", "Radatti", "Consignados", "Propios"] as const;
+const CONCESIONARIAS = ["DG", "SyS"] as const;
+
 export default function VehiclesPage() {
   // ======= ESTADO GENERAL =======
   const [query, setQuery] = useState<VehicleQuery>(initialQuery);
@@ -159,7 +162,7 @@ export default function VehiclesPage() {
     })();
   }, []);
 
-  // Cargar modelos según marca en el formulario (sin pisar IDs si ya están seteados)
+  // Cargar modelos según marca en el formulario
   useEffect(() => {
     (async () => {
       if (!formBrandId) {
@@ -171,11 +174,10 @@ export default function VehiclesPage() {
       }
       const ms = await listModels(formBrandId);
       setFormModels(ms);
-      // NO reseteamos formModelId aquí, lo maneja el handler de edición o el onChange del select
     })();
   }, [formBrandId]);
 
-  // Cargar versiones según modelo en el formulario (sin pisar formVersionId)
+  // Cargar versiones según modelo en el formulario
   useEffect(() => {
     (async () => {
       if (!formModelId) {
@@ -185,7 +187,6 @@ export default function VehiclesPage() {
       }
       const vs = await listVersions(formModelId);
       setFormVersions(vs);
-      // NO reseteamos formVersionId aquí
     })();
   }, [formModelId]);
 
@@ -260,12 +261,33 @@ export default function VehiclesPage() {
     const fd = new FormData(ev.currentTarget);
     const versionId = formVersionId ? Number(formVersionId) : undefined;
 
+    // ✅ NUEVOS CAMPOS
+    const rawKilometraje = fd.get("kilometraje");
+    const kilometraje =
+      rawKilometraje === null || String(rawKilometraje).trim() === ""
+        ? null
+        : Number(rawKilometraje);
+
+    const concesionariaRaw = String(fd.get("concesionaria") || "").trim();
+    const procedenciaRaw = String(fd.get("procedencia") || "").trim();
+
     const payload = {
       versionId,
       year: Number(fd.get("year") as string),
+
+      // ✅ Kilometraje (después de año)
+      kilometraje,
+
       plate: String(fd.get("plate") || ""),
       engineNumber: String(fd.get("engineNumber") || ""),
       chassisNumber: String(fd.get("chassisNumber") || ""),
+
+      // ✅ Concesionaria (después de chasis)
+      concesionaria: concesionariaRaw ? concesionariaRaw : null,
+
+      // ✅ Procedencia (después de concesionaria)
+      procedencia: procedenciaRaw ? procedenciaRaw : null,
+
       color: String(fd.get("color") || ""),
       price: Number(fd.get("price") as string),
       status: String(fd.get("status") || "available"),
@@ -273,6 +295,26 @@ export default function VehiclesPage() {
 
     if (!payload.versionId) {
       alert("Seleccioná marca, modelo y versión");
+      return;
+    }
+
+    // Validaciones suaves frontend
+    if (payload.kilometraje !== null && Number.isNaN(payload.kilometraje)) {
+      alert("Kilometraje inválido.");
+      return;
+    }
+    if (
+      payload.concesionaria !== null &&
+      !CONCESIONARIAS.includes(payload.concesionaria as any)
+    ) {
+      alert("Concesionaria inválida.");
+      return;
+    }
+    if (
+      payload.procedencia !== null &&
+      !PROCEDENCIAS.includes(payload.procedencia as any)
+    ) {
+      alert("Procedencia inválida.");
       return;
     }
 
@@ -301,7 +343,6 @@ export default function VehiclesPage() {
       setShowForm(false);
       setEditing(null);
       setDocFile(null);
-      // limpiamos selects del formulario
       setFormBrandId(undefined);
       setFormModelId(undefined);
       setFormVersionId(undefined);
@@ -325,26 +366,25 @@ export default function VehiclesPage() {
     }
   };
 
-const handleOpenDocumentation = async (id: number) => {
-  try {
-    const resp = await api.get(`/vehicles/${id}/documentation`, {
-      responseType: "blob",
-    });
+  const handleOpenDocumentation = async (id: number) => {
+    try {
+      const resp = await api.get(`/vehicles/${id}/documentation`, {
+        responseType: "blob",
+      });
 
-    const blobUrl = window.URL.createObjectURL(resp.data);
-    window.open(blobUrl, "_blank", "noopener,noreferrer");
-  } catch (err: any) {
-    if (err?.response?.status === 401) {
-      alert("Tu sesión expiró. Volvé a iniciar sesión.");
-    } else if (err?.response?.status === 404) {
-      alert("No se encontró la documentación del vehículo.");
-    } else {
-      alert("Error al abrir la documentación.");
+      const blobUrl = window.URL.createObjectURL(resp.data);
+      window.open(blobUrl, "_blank", "noopener,noreferrer");
+    } catch (err: any) {
+      if (err?.response?.status === 401) {
+        alert("Tu sesión expiró. Volvé a iniciar sesión.");
+      } else if (err?.response?.status === 404) {
+        alert("No se encontró la documentación del vehículo.");
+      } else {
+        alert("Error al abrir la documentación.");
+      }
+      console.error("Error abriendo documentación:", err);
     }
-    console.error("Error abriendo documentación:", err);
-  }
-};
-
+  };
 
   // 👉 NUEVO: abrir modal de NUEVO vehículo reseteando todo el form
   const handleOpenNewVehicleModal = () => {
@@ -369,14 +409,12 @@ const handleOpenDocumentation = async (id: number) => {
     const versionName = anyV.versionName as string | undefined;
 
     (async () => {
-      // 1) Aseguramos tener el catálogo de marcas
       let brandsList = formBrands;
       if (!brandsList || brandsList.length === 0) {
         brandsList = await listBrands();
         setFormBrands(brandsList);
       }
 
-      // 2) Buscar la marca por nombre
       const brand = brandsList.find((b) => b.name === brandName);
       const brandId = brand?.id;
       setFormBrandId(brandId);
@@ -390,7 +428,6 @@ const handleOpenDocumentation = async (id: number) => {
         return;
       }
 
-      // 3) Cargar modelos de esa marca y seleccionar el correcto
       const modelsList = await listModels(brandId);
       setFormModels(modelsList);
 
@@ -405,7 +442,6 @@ const handleOpenDocumentation = async (id: number) => {
         return;
       }
 
-      // 4) Cargar versiones de ese modelo y seleccionar la correcta
       const versionsList = await listVersions(modelId);
       setFormVersions(versionsList);
 
@@ -413,7 +449,6 @@ const handleOpenDocumentation = async (id: number) => {
       const versionId = version?.id;
       setFormVersionId(versionId);
 
-      // Finalmente abrimos el modal ya con todo seteado
       setShowForm(true);
     })();
   };
@@ -520,11 +555,28 @@ const handleOpenDocumentation = async (id: number) => {
             value={query.color || ""}
             onChange={(e) => setField("color", e.target.value)}
           />
+
+          {/* ✅ NUEVO FILTRO: Concesionaria */}
+          <select
+            value={(query as any).concesionaria || ""}
+            onChange={(e) =>
+              setField(
+                "concesionaria" as any,
+                e.target.value ? e.target.value : undefined
+              )
+            }
+          >
+            <option value="">Concesionaria</option>
+            {CONCESIONARIAS.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
+
           <select
             value={query.status || ""}
-            onChange={(e) =>
-              setField("status", e.target.value || undefined)
-            }
+            onChange={(e) => setField("status", e.target.value || undefined)}
           >
             <option value="">Estado</option>
             <option value="available">Disponible</option>
@@ -561,6 +613,12 @@ const handleOpenDocumentation = async (id: number) => {
               <th>Modelo</th>
               <th>Versión</th>
               <th>Año</th>
+
+              {/* ✅ NUEVOS CAMPOS EN LISTA */}
+              <th>Kilometraje</th>
+              <th>Concesionaria</th>
+              <th>Procedencia</th>
+
               <th>Patente</th>
               <th>Color</th>
               <th>Precio</th>
@@ -573,12 +631,25 @@ const handleOpenDocumentation = async (id: number) => {
             {data.items.map((v) => {
               const anyV = v as any;
               const docPath = anyV.documentationPath;
+
               return (
                 <tr key={v.id}>
                   <td>{anyV.brand}</td>
                   <td>{anyV.model}</td>
                   <td>{anyV.versionName}</td>
                   <td>{v.year}</td>
+
+                  {/* ✅ NUEVOS CAMPOS EN LISTA */}
+                  <td>
+                    {anyV.kilometraje !== null &&
+                    anyV.kilometraje !== undefined &&
+                    String(anyV.kilometraje).trim() !== ""
+                      ? Number(anyV.kilometraje).toLocaleString()
+                      : "—"}
+                  </td>
+                  <td>{anyV.concesionaria || "—"}</td>
+                  <td>{anyV.procedencia || "—"}</td>
+
                   <td>{v.plate}</td>
                   <td>{v.color}</td>
                   <td>${v.price.toLocaleString()}</td>
@@ -609,10 +680,7 @@ const handleOpenDocumentation = async (id: number) => {
                     >
                       Editar
                     </button>
-                    <button
-                      className="btn-danger"
-                      onClick={() => onDelete(v)}
-                    >
+                    <button className="btn-danger" onClick={() => onDelete(v)}>
                       Eliminar
                     </button>
                   </td>
@@ -621,7 +689,7 @@ const handleOpenDocumentation = async (id: number) => {
             })}
             {data.items.length === 0 && (
               <tr>
-                <td colSpan={10} style={{ textAlign: "center", padding: 24 }}>
+                <td colSpan={13} style={{ textAlign: "center", padding: 24 }}>
                   Sin resultados
                 </td>
               </tr>
@@ -657,10 +725,7 @@ const handleOpenDocumentation = async (id: number) => {
       {/* MODAL */}
       {showForm && (
         <div className="modal-overlay" onClick={() => setShowForm(false)}>
-          <div
-            className="modal-content"
-            onClick={(e) => e.stopPropagation()}
-          >
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <h3>{editing ? "Editar vehículo" : "Nuevo vehículo"}</h3>
             <form onSubmit={onSubmit}>
               {/* Selects dependientes */}
@@ -758,6 +823,16 @@ const handleOpenDocumentation = async (id: number) => {
                 defaultValue={editing?.year || ""}
                 required
               />
+
+              {/* ✅ NUEVO: Kilometraje (después de Año) */}
+              <input
+                name="kilometraje"
+                type="number"
+                placeholder="Kilometraje"
+                defaultValue={(editing as any)?.kilometraje ?? ""}
+                min={0}
+              />
+
               <input
                 name="plate"
                 placeholder="Patente"
@@ -782,6 +857,33 @@ const handleOpenDocumentation = async (id: number) => {
                 defaultValue={editing?.chassisNumber || ""}
                 required
               />
+
+              {/* ✅ NUEVO: Concesionaria (después de N° chasis) */}
+              <select
+                name="concesionaria"
+                defaultValue={(editing as any)?.concesionaria ?? ""}
+              >
+                <option value="">Concesionaria</option>
+                {CONCESIONARIAS.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+
+              {/* ✅ NUEVO: Procedencia (después de Concesionaria) */}
+              <select
+                name="procedencia"
+                defaultValue={(editing as any)?.procedencia ?? ""}
+              >
+                <option value="">Procedencia</option>
+                {PROCEDENCIAS.map((p) => (
+                  <option key={p} value={p}>
+                    {p}
+                  </option>
+                ))}
+              </select>
+
               <input
                 name="price"
                 type="number"
@@ -803,9 +905,7 @@ const handleOpenDocumentation = async (id: number) => {
               {/* 📁 Campo para documentación */}
               <input
                 type="file"
-                onChange={(e) =>
-                  setDocFile(e.target.files?.[0] || null)
-                }
+                onChange={(e) => setDocFile(e.target.files?.[0] || null)}
               />
 
               <div className="modal-actions">
