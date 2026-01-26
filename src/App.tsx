@@ -29,7 +29,7 @@ import ReservationListPage from "./pages/ReservationListPage";
 import AuditPage from "./pages/AuditPage";
 import SalesList from "./pages/SalesList";
 import SettingsPage from "./pages/settings";
-
+import Refunds from "./pages/Refunds";
 
 // Assets & global
 import theme from "./theme";
@@ -77,7 +77,6 @@ const App = () => {
             <SnackbarProvider maxSnack={3} autoHideDuration={3000}>
               <MainLayout>
                 <Routes>
-
                   {/* ✅ RUTA PÚBLICA */}
                   <Route path="/login" element={<Login />} />
 
@@ -85,7 +84,7 @@ const App = () => {
                   <Route
                     path="/home"
                     element={
-                      <ProtectedRoute>
+                      <ProtectedRoute permissionKey="home">
                         <Home />
                       </ProtectedRoute>
                     }
@@ -94,7 +93,7 @@ const App = () => {
                   <Route
                     path="/roles"
                     element={
-                      <ProtectedRoute roles={["admin"]}>
+                      <ProtectedRoute roles={["admin"]} permissionKey="roles">
                         <RolesPage />
                       </ProtectedRoute>
                     }
@@ -103,7 +102,7 @@ const App = () => {
                   <Route
                     path="/reservations"
                     element={
-                      <ProtectedRoute>
+                      <ProtectedRoute permissionKey="reservations">
                         <ReservationsPage />
                       </ProtectedRoute>
                     }
@@ -112,8 +111,17 @@ const App = () => {
                   <Route
                     path="/reservation-list"
                     element={
-                      <ProtectedRoute>
+                      <ProtectedRoute permissionKey="reservation-list">
                         <ReservationListPage />
+                      </ProtectedRoute>
+                    }
+                  />
+
+                  <Route
+                    path="/refunds"
+                    element={
+                      <ProtectedRoute permissionKey="refunds">
+                        <Refunds />
                       </ProtectedRoute>
                     }
                   />
@@ -121,7 +129,7 @@ const App = () => {
                   <Route
                     path="/sales"
                     element={
-                      <ProtectedRoute>
+                      <ProtectedRoute permissionKey="sales">
                         <Sales />
                       </ProtectedRoute>
                     }
@@ -130,7 +138,7 @@ const App = () => {
                   <Route
                     path="/sales/list"
                     element={
-                      <ProtectedRoute>
+                      <ProtectedRoute permissionKey="sales-list">
                         <SalesList />
                       </ProtectedRoute>
                     }
@@ -139,7 +147,7 @@ const App = () => {
                   <Route
                     path="/installment-payments"
                     element={
-                      <ProtectedRoute>
+                      <ProtectedRoute permissionKey="installment-payments">
                         <InstallmentPayments />
                       </ProtectedRoute>
                     }
@@ -148,7 +156,7 @@ const App = () => {
                   <Route
                     path="/installments"
                     element={
-                      <ProtectedRoute>
+                      <ProtectedRoute permissionKey="installments">
                         <Installments />
                       </ProtectedRoute>
                     }
@@ -157,7 +165,7 @@ const App = () => {
                   <Route
                     path="/vehicles"
                     element={
-                      <ProtectedRoute>
+                      <ProtectedRoute permissionKey="vehicles">
                         <Vehicles />
                       </ProtectedRoute>
                     }
@@ -166,7 +174,7 @@ const App = () => {
                   <Route
                     path="/clients"
                     element={
-                      <ProtectedRoute>
+                      <ProtectedRoute permissionKey="clients">
                         <Clients />
                       </ProtectedRoute>
                     }
@@ -175,7 +183,7 @@ const App = () => {
                   <Route
                     path="/budgets"
                     element={
-                      <ProtectedRoute>
+                      <ProtectedRoute permissionKey="budgets">
                         <Budgets />
                       </ProtectedRoute>
                     }
@@ -184,7 +192,7 @@ const App = () => {
                   <Route
                     path="/budget-reports"
                     element={
-                      <ProtectedRoute>
+                      <ProtectedRoute permissionKey="budget-reports">
                         <BudgetReports />
                       </ProtectedRoute>
                     }
@@ -193,27 +201,25 @@ const App = () => {
                   <Route
                     path="/settings"
                     element={
-                      <ProtectedRoute>
+                      <ProtectedRoute permissionKey="settings">
                         <SettingsPage />
                       </ProtectedRoute>
                     }
                   />
 
-<Route
-  path="/audit"
-  element={
-    <ProtectedRoute roles={["admin"]}>
-      <AuditPage />
-    </ProtectedRoute>
-  }
-/>
+                  <Route
+                    path="/audit"
+                    element={
+                      <ProtectedRoute roles={["admin"]} permissionKey="audit">
+                        <AuditPage />
+                      </ProtectedRoute>
+                    }
+                  />
 
-
-                  {/* ✅ SOLO ADMIN puede acceder al módulo Usuarios */}
                   <Route
                     path="/users"
                     element={
-                      <ProtectedRoute roles={["admin"]}>
+                      <ProtectedRoute roles={["admin"]} permissionKey="users">
                         <UsersPage />
                       </ProtectedRoute>
                     }
@@ -223,7 +229,7 @@ const App = () => {
                   <Route
                     path="/"
                     element={
-                      <ProtectedRoute>
+                      <ProtectedRoute permissionKey="home">
                         <Box
                           sx={{
                             display: "flex",
@@ -258,7 +264,6 @@ const App = () => {
                       </ProtectedRoute>
                     }
                   />
-
                 </Routes>
               </MainLayout>
             </SnackbarProvider>

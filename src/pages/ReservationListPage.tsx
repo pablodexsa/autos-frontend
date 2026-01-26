@@ -50,20 +50,25 @@ interface Reservation {
   sellerName?: string; // viene del backend
 }
 
+type AlertState = {
+  open: boolean;
+  msg: string;
+  type: "success" | "error";
+  showRefundsAction?: boolean; // ✅ NUEVO
+};
+
 const ReservationListPage: React.FC = () => {
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [loading, setLoading] = useState(false);
   const [openGuarantors, setOpenGuarantors] = useState(false);
   const [selectedGuarantors, setSelectedGuarantors] = useState<Guarantor[]>([]);
   const [selectedReservationId, setSelectedReservationId] = useState<number | null>(null);
-  const [alert, setAlert] = useState<{
-    open: boolean;
-    msg: string;
-    type: "success" | "error";
-  }>({
+
+  const [alert, setAlert] = useState<AlertState>({
     open: false,
     msg: "",
     type: "success",
+    showRefundsAction: false,
   });
 
   const navigate = useNavigate();
@@ -76,6 +81,12 @@ const ReservationListPage: React.FC = () => {
       setReservations(res.data);
     } catch (error) {
       console.error("Error al cargar reservas:", error);
+      setAlert({
+        open: true,
+        msg: "Error al cargar reservas.",
+        type: "error",
+        showRefundsAction: false,
+      });
     } finally {
       setLoading(false);
     }
@@ -108,13 +119,19 @@ const ReservationListPage: React.FC = () => {
       link.click();
       link.remove();
 
+      // Si querés abrirlo en nueva pestaña, dejalo; si no, podés sacar estas 2 líneas.
       window.open(url, "_blank");
       window.URL.revokeObjectURL(url);
 
       console.log(`✅ Reserva descargada como ${fileName}`);
     } catch (err) {
       console.error("❌ Error al descargar el PDF de la reserva:", err);
-      alert("Error al descargar el PDF de la reserva.");
+      setAlert({
+        open: true,
+        msg: "Error al descargar el PDF de la reserva.",
+        type: "error",
+        showRefundsAction: false,
+      });
     }
   };
 
@@ -122,9 +139,32 @@ const ReservationListPage: React.FC = () => {
   const handleUpdateStatus = async (id: number, status: string) => {
     try {
       await api.patch(`/reservations/${id}`, { status });
-      fetchReservations();
-    } catch {
-      alert("Error al actualizar estado de reserva.");
+      await fetchReservations();
+
+      // ✅ Mensaje especial al cancelar (genera devolución pendiente en backend)
+      if (status === "Cancelada") {
+        setAlert({
+          open: true,
+          msg: "Reserva cancelada. Se generó una devolución pendiente.",
+          type: "success",
+          showRefundsAction: true,
+        });
+      } else {
+        setAlert({
+          open: true,
+          msg: "Estado de reserva actualizado correctamente.",
+          type: "success",
+          showRefundsAction: false,
+        });
+      }
+    } catch (e: any) {
+      console.error("Error al actualizar estado:", e);
+      setAlert({
+        open: true,
+        msg: e?.response?.data?.message || "Error al actualizar estado de reserva.",
+        type: "error",
+        showRefundsAction: false,
+      });
     }
   };
 
@@ -155,6 +195,7 @@ const ReservationListPage: React.FC = () => {
         open: true,
         msg: "Reservas vencidas actualizadas correctamente.",
         type: "success",
+        showRefundsAction: false,
       });
       await fetchReservations();
     } catch (error) {
@@ -163,6 +204,7 @@ const ReservationListPage: React.FC = () => {
         open: true,
         msg: "Error al actualizar vencidas.",
         type: "error",
+        showRefundsAction: false,
       });
     } finally {
       setLoading(false);
@@ -229,13 +271,14 @@ const ReservationListPage: React.FC = () => {
                     sx={{
                       "&:hover": { backgroundColor: "#33334d" },
                       transition: "0.3s",
+                      color: "#fff",
                     }}
                   >
-                    <TableCell>{r.id}</TableCell>
-                    <TableCell>{r.clientDni}</TableCell>
-                    <TableCell>{r.plate}</TableCell>
-                    <TableCell>{r.vehicle}</TableCell>
-                    <TableCell>
+                    <TableCell sx={{ color: "#fff" }}>{r.id}</TableCell>
+                    <TableCell sx={{ color: "#fff" }}>{r.clientDni}</TableCell>
+                    <TableCell sx={{ color: "#fff" }}>{r.plate}</TableCell>
+                    <TableCell sx={{ color: "#fff" }}>{r.vehicle}</TableCell>
+                    <TableCell sx={{ color: "#fff" }}>
                       {r.date ? new Date(r.date).toLocaleDateString("es-AR") : "-"}
                     </TableCell>
                     <TableCell
@@ -252,7 +295,7 @@ const ReservationListPage: React.FC = () => {
                     </TableCell>
 
                     {/* Vendedor */}
-                    <TableCell>{r.sellerName || "Anónimo"}</TableCell>
+                    <TableCell sx={{ color: "#fff" }}>{r.sellerName || "Anónimo"}</TableCell>
 
                     <TableCell>
                       <Button
@@ -373,11 +416,29 @@ const ReservationListPage: React.FC = () => {
       {/* 🔔 Snackbar */}
       <Snackbar
         open={alert.open}
-        autoHideDuration={3000}
-        onClose={() => setAlert((prev) => ({ ...prev, open: false }))}
+        autoHideDuration={4000}
+        onClose={() => setAlert((prev) => ({ ...prev, open: false, showRefundsAction: false }))}
         anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
       >
-        <Alert severity={alert.type}>{alert.msg}</Alert>
+        <Alert
+          severity={alert.type}
+          action={
+            alert.showRefundsAction ? (
+              <Button
+                color="inherit"
+                size="small"
+                onClick={() => {
+                  setAlert((prev) => ({ ...prev, open: false, showRefundsAction: false }));
+                  navigate("/refunds");
+                }}
+              >
+                Ir a Devoluciones
+              </Button>
+            ) : undefined
+          }
+        >
+          {alert.msg}
+        </Alert>
       </Snackbar>
     </Box>
   );

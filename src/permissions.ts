@@ -1,11 +1,13 @@
-export const permissions = {
+﻿export const permissions = {
   admin: [
+    "home",
     "vehicles",
     "clients",
     "budgets",
     "budget-reports",
     "reservations",
     "reservation-list",
+    "refunds",
     "sales",
     "sales-list",
     "installment-payments",
@@ -17,18 +19,7 @@ export const permissions = {
   ],
 
   vendedor: [
-    "vehicles",
-    "clients",
-    "budgets",
-    "reservations",
-    "reservation-list",
-    "sales",
-    "sales-list",
-    "installment-payments",
-    "installments",
-  ],
-
-  gerencia: [
+    "home",
     "vehicles",
     "clients",
     "budgets",
@@ -36,9 +27,36 @@ export const permissions = {
     "reservations",
     "reservation-list",
     "sales",
+  ],
+
+  gerencia: [
+    "home",
+    "vehicles",
+    "clients",
+    "budgets",
+    "budget-reports",
+    "reservations",
+    "reservation-list",
+    "refunds",
+    "sales",
+    "sales-list",
+    "settings",
+  ],
+
+  legales: [
+    "home",
+    "vehicles",
+    "clients",
+    "budget-reports",
+    "reservation-list",
+    "refunds",
     "sales-list",
     "installment-payments",
     "installments",
-    "settings",
+  ],
+
+  viewer: [
+    "home",
+    "vehicles",
   ],
 };

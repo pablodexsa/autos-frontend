@@ -1,21 +1,30 @@
-import api from "./api";
+﻿import api from "./api";
 
-export const getRoles = async () => {
-  const res = await api.get("/roles");
+export interface Role {
+  id: number;
+  name: string;
+  description?: string;
+}
+
+// 🔹 Obtener todos los roles (incluye ahora "legales")
+export const getRoles = async (): Promise<Role[]> => {
+  const res = await api.get<Role[]>("/roles");
   return res.data;
 };
 
-export const createRole = async (name: string) => {
-  const res = await api.post("/roles", { name });
+// 🔹 Crear rol (aunque no uses UI, lo dejamos por compatibilidad)
+export const createRole = async (name: string): Promise<Role> => {
+  const res = await api.post<Role>("/roles", { name });
   return res.data;
 };
 
-export const updateRole = async (id: number, name: string) => {
-  const res = await api.patch(`/roles/${id}`, { name });
+// 🔹 Actualizar rol
+export const updateRole = async (id: number, name: string): Promise<Role> => {
+  const res = await api.patch<Role>(`/roles/${id}`, { name });
   return res.data;
 };
 
-export const deleteRole = async (id: number) => {
-  const res = await api.delete(`/roles/${id}`);
-  return res.data;
+// 🔹 Eliminar rol
+export const deleteRole = async (id: number): Promise<void> => {
+  await api.delete(`/roles/${id}`);
 };

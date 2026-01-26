@@ -18,28 +18,30 @@ import ListAltIcon from "@mui/icons-material/ListAlt";
 import SettingsIcon from "@mui/icons-material/Settings";
 import EventAvailableIcon from "@mui/icons-material/EventAvailable";
 import PersonIcon from "@mui/icons-material/Person";
+import PaidIcon from "@mui/icons-material/Paid"; // ✅ Devoluciones
 import { useNavigate, useLocation } from "react-router-dom";
 import { permissions } from "../permissions";
-import { useAuth } from "../context/AuthContext"; // ✅ tu contexto
+import { useAuth } from "../context/AuthContext";
 
 const drawerWidth = 240;
 
 interface SidebarProps {
-  mobileOpen: boolean;
+  mobileOpen?: boolean;
   handleDrawerToggle?: () => void;
 }
 
-
-const Sidebar: React.FC<SidebarProps> = ({ mobileOpen, handleDrawerToggle }) => {
+const Sidebar: React.FC<SidebarProps> = ({ mobileOpen = false, handleDrawerToggle }) => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user } = useAuth(); // ✅ leemos el usuario logueado
+  const { user } = useAuth();
 
-const role =
-  typeof user?.role === "string"
-    ? user.role
-    : user?.role?.name || "";
+  // 🔐 Rol normalizado
+  const role =
+    typeof user?.role === "string"
+      ? user.role.toLowerCase()
+      : user?.role?.name?.toLowerCase() || "";
 
+  const allowedKeys = permissions[role] || [];
 
   const menuItems = [
     { text: "Vehículos", icon: <DirectionsCarIcon />, path: "/vehicles", key: "vehicles" },
@@ -48,23 +50,18 @@ const role =
     { text: "Listado de Presupuestos", icon: <DescriptionIcon />, path: "/budget-reports", key: "budget-reports" },
     { text: "Reservas", icon: <EventAvailableIcon />, path: "/reservations", key: "reservations" },
     { text: "Listado de Reservas", icon: <ListAltIcon />, path: "/reservation-list", key: "reservation-list" },
-{ text: "Ventas", icon: <AttachMoneyIcon />, path: "/sales", key: "sales" },
-{ text: "Listado de Ventas", icon: <ListAltIcon />, path: "/sales/list", key: "sales-list" },
+
+    // 💰 Devoluciones
+    { text: "Devoluciones", icon: <PaidIcon />, path: "/refunds", key: "refunds" },
+
+    { text: "Ventas", icon: <AttachMoneyIcon />, path: "/sales", key: "sales" },
+    { text: "Listado de Ventas", icon: <ListAltIcon />, path: "/sales/list", key: "sales-list" },
     { text: "Cuotas", icon: <ListAltIcon />, path: "/installments", key: "installments" },
-{ text: "Pago de Cuotas", icon: <PaymentsIcon />, path: "/installment-payments", key: "installment-payments" },
+    { text: "Pago de Cuotas", icon: <PaymentsIcon />, path: "/installment-payments", key: "installment-payments" },
     { text: "Configuración", icon: <SettingsIcon />, path: "/settings", key: "settings" },
     { text: "Auditoría del Sistema", icon: <ListAltIcon />, path: "/audit", key: "audit" },
-
-    // ✅ Nuevo módulo Usuarios
     { text: "Usuarios", icon: <PersonIcon />, path: "/users", key: "users" },
   ];
-
-console.log("=== DEBUG SIDEBAR ===");
-console.log("USER:", user);
-console.log("ROLE OBJ:", user?.role);
-console.log("ROLE NAME:", user?.role?.name);
-console.log("PERMISSIONS:", permissions[user?.role?.name]);
-console.log("======================");
 
   const drawerContent = (
     <Box
@@ -84,24 +81,19 @@ console.log("======================");
       <Box sx={{ overflow: "auto", mt: 2 }}>
         <List>
           {menuItems
-            .filter((item) => permissions[role]?.includes(item.key)) // ✅ FILTRO POR ROL
+            .filter((item) => allowedKeys.includes(item.key))
             .map((item) => (
               <ListItemButton
-                key={item.text}
+                key={item.key}
                 onClick={() => {
                   navigate(item.path);
                   handleDrawerToggle?.();
                 }}
                 sx={{
-                  backgroundColor:
-                    location.pathname === item.path ? "#00BFA5" : "transparent",
-                  color:
-                    location.pathname === item.path
-                      ? "#fff"
-                      : "rgba(255,255,255,0.8)",
+                  backgroundColor: location.pathname === item.path ? "#00BFA5" : "transparent",
+                  color: location.pathname === item.path ? "#fff" : "rgba(255,255,255,0.8)",
                   "&:hover": {
-                    backgroundColor:
-                      location.pathname === item.path ? "#00d9b8" : "#2a2a3b",
+                    backgroundColor: location.pathname === item.path ? "#00d9b8" : "#2a2a3b",
                   },
                   borderRadius: "8px",
                   mx: 1,
@@ -110,10 +102,7 @@ console.log("======================");
                 }}
               >
                 <ListItemIcon sx={{ color: "inherit" }}>{item.icon}</ListItemIcon>
-                <ListItemText
-                  primary={item.text}
-                  primaryTypographyProps={{ fontWeight: 500 }}
-                />
+                <ListItemText primary={item.text} primaryTypographyProps={{ fontWeight: 500 }} />
               </ListItemButton>
             ))}
         </List>

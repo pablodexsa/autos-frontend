@@ -26,11 +26,20 @@ export default function UsersPage() {
     name: "",
     email: "",
     password: "",
-    roleId: 2,
+    roleId: 0,
   });
 
   const loadUsers = async () => setUsers(await getUsers());
-  const loadRoles = async () => setRoles(await getRoles());
+
+  const loadRoles = async () => {
+    const data = await getRoles();
+    setRoles(data);
+
+    // 🔹 Si estamos creando usuario nuevo, seleccionar primer rol disponible
+    if (!selectedUser && data.length > 0) {
+      setForm((prev) => ({ ...prev, roleId: data[0].id }));
+    }
+  };
 
   useEffect(() => {
     loadUsers();
@@ -48,7 +57,15 @@ export default function UsersPage() {
 
     setModalOpen(false);
     setSelectedUser(null);
-    setForm({ name: "", email: "", password: "", roleId: 2 });
+
+    // 🔹 Reset con primer rol disponible
+    setForm({
+      name: "",
+      email: "",
+      password: "",
+      roleId: roles[0]?.id || 0,
+    });
+
     loadUsers();
   };
 
@@ -66,11 +83,7 @@ export default function UsersPage() {
           Gestión de Usuarios
         </Typography>
 
-        <Button
-          variant="contained"
-          sx={{ mb: 2 }}
-          onClick={() => setModalOpen(true)}
-        >
+        <Button variant="contained" sx={{ mb: 2 }} onClick={() => setModalOpen(true)}>
           + Nuevo Usuario
         </Button>
 
@@ -133,7 +146,7 @@ export default function UsersPage() {
         </Box>
       </CardContent>
 
-      {/* ✅ Modal Usuario */}
+      {/* Modal Usuario */}
       <Dialog open={modalOpen} onClose={() => setModalOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle>{selectedUser ? "Editar Usuario" : "Nuevo Usuario"}</DialogTitle>
         <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 2, mt: 1 }}>
@@ -182,7 +195,7 @@ export default function UsersPage() {
         </DialogActions>
       </Dialog>
 
-      {/* ✅ Modal eliminar */}
+      {/* Modal eliminar */}
       <Dialog open={deleteOpen} onClose={() => setDeleteOpen(false)}>
         <DialogTitle>Eliminar Usuario</DialogTitle>
         <DialogContent>

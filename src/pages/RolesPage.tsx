@@ -21,19 +21,31 @@ export default function RolesPage() {
 
   const loadRoles = async () => {
     const data = await getRoles();
-    setRoles(data);
+    setRoles(Array.isArray(data) ? data : []);
   };
 
   useEffect(() => {
     loadRoles();
   }, []);
 
+  const normalizeRoleName = (s: string) => s.trim().toLowerCase();
+
   const handleSave = async () => {
-    if (selectedRole) {
-      await updateRole(selectedRole.id, roleName);
-    } else {
-      await createRole(roleName);
+    const normalized = normalizeRoleName(roleName);
+
+    if (!normalized) {
+      alert("Ingrese un nombre de rol válido.");
+      return;
     }
+
+    // ✅ Regla: los roles deben guardarse en minúscula para matchear permissions.ts
+    // Ej: "legales"
+    if (selectedRole) {
+      await updateRole(selectedRole.id, normalized);
+    } else {
+      await createRole(normalized);
+    }
+
     setModalOpen(false);
     setSelectedRole(null);
     setRoleName("");
@@ -48,16 +60,26 @@ export default function RolesPage() {
   return (
     <Card sx={{ bgcolor: "#1c1c2e", color: "#fff", p: 3 }}>
       <CardContent>
-        <Typography variant="h5" sx={{ mb: 2 }}>
+        <Typography variant="h5" sx={{ mb: 1 }}>
           Gestión de Roles
         </Typography>
+
+        <Typography variant="body2" sx={{ mb: 2, color: "rgba(255,255,255,0.75)" }}>
+          Nota: los roles se guardan en minúscula (por ejemplo: <b>legales</b>) para que coincidan con permissions.ts.
+        </Typography>
+
         <Button
           variant="contained"
           sx={{ mb: 2 }}
-          onClick={() => setModalOpen(true)}
+          onClick={() => {
+            setSelectedRole(null);
+            setRoleName("");
+            setModalOpen(true);
+          }}
         >
           + Nuevo Rol
         </Button>
+
         <Box>
           {roles.map((role) => (
             <Box
@@ -107,6 +129,7 @@ export default function RolesPage() {
             fullWidth
             value={roleName}
             onChange={(e) => setRoleName(e.target.value)}
+            helperText='Sugerencia: escribí "legales"'
           />
         </DialogContent>
         <DialogActions>
