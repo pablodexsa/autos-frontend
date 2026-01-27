@@ -2,6 +2,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import api from "../api/api";
 import "./Vehicles.css";
+import { useAuth } from "../context/AuthContext";
 
 interface Client {
   id: number;
@@ -41,6 +42,12 @@ const initialPagination: PaginationState = {
 };
 
 export default function ClientsPage() {
+  const { hasPermission } = useAuth();
+
+  // ✅ Permisos (según tu matriz)
+  const canCreate = hasPermission("CLIENT_CREATE");
+  const canEdit = hasPermission("CLIENT_EDIT");
+
   // ======= DATA =======
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(false);
@@ -182,7 +189,13 @@ export default function ClientsPage() {
   const setLimit = (limit: number) => setPagination({ page: 1, limit });
 
   // ======= DOWNLOAD DNI =======
+  // ✅ Restricción: solo quien puede EDITAR (Gerencia/Admin)
   const handleDownloadDni = async (clientId: number) => {
+    if (!canEdit) {
+      alert("No tenés permisos para descargar el DNI.");
+      return;
+    }
+
     try {
       const resp = await api.get(`/clients/${clientId}/dni`, {
         responseType: "blob",
@@ -203,6 +216,11 @@ export default function ClientsPage() {
 
   // ======= MODAL: NUEVO =======
   const handleOpenNewClientModal = () => {
+    if (!canCreate) {
+      alert("No tenés permisos para crear clientes.");
+      return;
+    }
+
     setEditing(null);
     const fresh = {
       firstName: "",
@@ -220,6 +238,11 @@ export default function ClientsPage() {
 
   // ======= MODAL: EDITAR =======
   const handleOpenEditClientModal = (c: Client) => {
+    if (!canEdit) {
+      alert("No tenés permisos para editar clientes.");
+      return;
+    }
+
     setEditing(c);
     const mapped = {
       firstName: c.firstName || "",
@@ -241,9 +264,7 @@ export default function ClientsPage() {
 
     // ✅ Confirmación al cancelar si hay cambios
     if (currentSnap !== originalSnap) {
-      const ok = window.confirm(
-        "Tenés cambios sin guardar. ¿Cerrar igualmente?"
-      );
+      const ok = window.confirm("Tenés cambios sin guardar. ¿Cerrar igualmente?");
       if (!ok) return;
     }
 
@@ -255,6 +276,16 @@ export default function ClientsPage() {
   // ======= SUBMIT =======
   const onSubmit = async (ev: React.FormEvent<HTMLFormElement>) => {
     ev.preventDefault();
+
+    // ✅ RBAC hard-stop
+    if (editing && !canEdit) {
+      alert("No tenés permisos para editar clientes.");
+      return;
+    }
+    if (!editing && !canCreate) {
+      alert("No tenés permisos para crear clientes.");
+      return;
+    }
 
     // ✅ Todos los campos requeridos
     if (
@@ -304,6 +335,7 @@ export default function ClientsPage() {
       }
 
       // ✅ Subida DNI adjunto (si hay archivo)
+      // ✅ Restricción: subir DNI implica modificar/actualizar info -> solo canEdit/canCreate según modo
       if (dniFile && saved?.id) {
         try {
           const fd = new FormData();
@@ -382,9 +414,12 @@ export default function ClientsPage() {
 
       {/* ACCIONES */}
       <div style={{ marginBottom: 12, display: "flex", gap: 10 }}>
-        <button className="btn-primary" onClick={handleOpenNewClientModal}>
-          Nuevo cliente
-        </button>
+        {canCreate && (
+          <button className="btn-primary" onClick={handleOpenNewClientModal}>
+            Nuevo cliente
+          </button>
+        )}
+
         <button
           className="btn-secondary"
           onClick={fetchClients}
@@ -429,6 +464,12 @@ export default function ClientsPage() {
                       <button
                         className="btn-secondary"
                         onClick={() => handleDownloadDni(c.id)}
+                        disabled={!canEdit}
+                        title={
+                          canEdit
+                            ? "Descargar DNI"
+                            : "No tenés permisos para descargar DNI"
+                        }
                       >
                         Descargar
                       </button>
@@ -441,12 +482,16 @@ export default function ClientsPage() {
                   <td>{c.email || "—"}</td>
                   <td>{c.address || "—"}</td>
                   <td>
-                    <button
-                      className="btn-secondary"
-                      onClick={() => handleOpenEditClientModal(c)}
-                    >
-                      Editar
-                    </button>
+                    {canEdit ? (
+                      <button
+                        className="btn-secondary"
+                        onClick={() => handleOpenEditClientModal(c)}
+                      >
+                        Editar
+                      </button>
+                    ) : (
+                      "—"
+                    )}
                   </td>
                 </tr>
               );
@@ -561,7 +606,10 @@ export default function ClientsPage() {
                   type="file"
                   onChange={(e) => setDniFile(e.target.files?.[0] || null)}
                   // ✅ requerido al crear; en edición solo si no existe uno previo
-                  required={!editing || (!dniFile && !Boolean((editing as any)?.dniPath))}
+                  required={
+                    !editing ||
+                    (!dniFile && !Boolean((editing as any)?.dniPath))
+                  }
                 />
                 {dniFile && (
                   <div style={{ marginTop: 6, opacity: 0.85 }}>
@@ -590,6 +638,12 @@ export default function ClientsPage() {
                 <button
                   className="btn-secondary"
                   onClick={() => handleDownloadDni(editing.id)}
+                  disabled={!canEdit}
+                  title={
+                    canEdit
+                      ? "Descargar DNI actual"
+                      : "No tenés permisos para descargar DNI"
+                  }
                 >
                   Descargar DNI actual
                 </button>

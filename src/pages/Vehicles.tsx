@@ -15,6 +15,7 @@ import { Brand, Model, Version } from "../types/catalog";
 import "./Vehicles.css";
 import { API_URL } from "../config";
 import api from "../api/api"; // para SSE y documentación
+import { useAuth } from "../context/AuthContext"; // ✅ NUEVO (permisos)
 
 const initialQuery: VehicleQuery = {
   page: 1,
@@ -27,6 +28,12 @@ const PROCEDENCIAS = ["Randazzo", "Radatti", "Consignados", "Propios"] as const;
 const CONCESIONARIAS = ["DG", "SyS"] as const;
 
 export default function VehiclesPage() {
+  // ✅ PERMISOS
+  const { hasPermission } = useAuth();
+  const canCreate = hasPermission("VEHICLE_CREATE");
+  const canEdit = hasPermission("VEHICLE_EDIT");
+  const canDelete = hasPermission("VEHICLE_DELETE");
+
   // ======= ESTADO GENERAL =======
   const [query, setQuery] = useState<VehicleQuery>(initialQuery);
   const [data, setData] = useState<{
@@ -258,6 +265,17 @@ export default function VehiclesPage() {
   // ======= SUBMIT FORM =======
   const onSubmit = async (ev: React.FormEvent<HTMLFormElement>) => {
     ev.preventDefault();
+
+    // ✅ Bloqueo extra (por si alguien intenta abrir el modal manualmente)
+    if (!canCreate && !editing) {
+      alert("No tenés permisos para crear vehículos.");
+      return;
+    }
+    if (!canEdit && editing) {
+      alert("No tenés permisos para editar vehículos.");
+      return;
+    }
+
     const fd = new FormData(ev.currentTarget);
     const versionId = formVersionId ? Number(formVersionId) : undefined;
 
@@ -357,6 +375,10 @@ export default function VehiclesPage() {
   };
 
   const onDelete = async (v: Vehicle) => {
+    if (!canDelete) {
+      alert("No tenés permisos para eliminar vehículos.");
+      return;
+    }
     if (!window.confirm(`¿Eliminar ${v.brand} ${v.model} (${v.plate})?`)) return;
     try {
       await deleteVehicle(v.id);
@@ -388,6 +410,10 @@ export default function VehiclesPage() {
 
   // 👉 NUEVO: abrir modal de NUEVO vehículo reseteando todo el form
   const handleOpenNewVehicleModal = () => {
+    if (!canCreate) {
+      alert("No tenés permisos para crear vehículos.");
+      return;
+    }
     setEditing(null);
     setDocFile(null);
     setFormBrandId(undefined);
@@ -400,6 +426,11 @@ export default function VehiclesPage() {
 
   // 👉 EDITAR: cargar marca / modelo / versión por nombre sin que los useEffect los pisen
   const handleOpenEditVehicleModal = (v: Vehicle) => {
+    if (!canEdit) {
+      alert("No tenés permisos para editar vehículos.");
+      return;
+    }
+
     setEditing(v);
     setDocFile(null);
 
@@ -588,9 +619,12 @@ export default function VehiclesPage() {
 
       {/* ACCIONES */}
       <div style={{ marginBottom: 12, display: "flex", gap: 10 }}>
-        <button className="btn-primary" onClick={handleOpenNewVehicleModal}>
-          Nuevo vehículo
-        </button>
+        {canCreate && (
+          <button className="btn-primary" onClick={handleOpenNewVehicleModal}>
+            Nuevo vehículo
+          </button>
+        )}
+
         <button
           className="btn-secondary"
           onClick={handleForceUpdateStatus}
@@ -673,16 +707,23 @@ export default function VehiclesPage() {
                     )}
                   </td>
                   <td>
-                    <button
-                      className="btn-secondary"
-                      onClick={() => handleOpenEditVehicleModal(v)}
-                      style={{ marginRight: 6 }}
-                    >
-                      Editar
-                    </button>
-                    <button className="btn-danger" onClick={() => onDelete(v)}>
-                      Eliminar
-                    </button>
+                    {canEdit && (
+                      <button
+                        className="btn-secondary"
+                        onClick={() => handleOpenEditVehicleModal(v)}
+                        style={{ marginRight: 6 }}
+                      >
+                        Editar
+                      </button>
+                    )}
+
+                    {canDelete && (
+                      <button className="btn-danger" onClick={() => onDelete(v)}>
+                        Eliminar
+                      </button>
+                    )}
+
+                    {!canEdit && !canDelete && "—"}
                   </td>
                 </tr>
               );

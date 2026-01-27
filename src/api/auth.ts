@@ -1,4 +1,4 @@
-import api from "./api";
+﻿import api from "./api";
 
 export interface LoginResponse {
   access_token: string;
@@ -6,7 +6,8 @@ export interface LoginResponse {
     id: number;
     name: string;
     email: string;
-    role: { name: string };
+    role: string;          // ✅ viene como string
+    permissions: string[]; // ✅ viene del backend
   };
 }
 
@@ -15,7 +16,12 @@ export async function login(email: string, password: string): Promise<LoginRespo
   return data;
 }
 
-export async function register(name: string, email: string, password: string, roleId: number) {
+export async function register(
+  name: string,
+  email: string,
+  password: string,
+  roleId: number
+) {
   const { data } = await api.post("/auth/register", { name, email, password, roleId });
   return data;
 }

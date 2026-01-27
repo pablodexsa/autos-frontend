@@ -6,10 +6,12 @@ import {
   Typography,
   CircularProgress,
 } from "@mui/material";
-import { login } from "../api/authApi";
-import logo from "../assets/logo.jpeg"; // 👈 asegurate que este archivo exista
+import { login as apiLogin } from "../api/authApi";
+import { useAuth } from "../context/AuthContext";
+import logo from "../assets/logo.jpeg";
 
 export default function LoginPage() {
+  const { login } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -20,11 +22,17 @@ export default function LoginPage() {
     setLoading(true);
     setError("");
     try {
-      const data = await login(email, password);
-      console.log("Usuario autenticado:", data.user);
-      // ?? Redirigir o actualizar estado de sesión aquí
+      const data = await apiLogin(email, password);
+
+      const token = data.access_token || (data as any).token;
+      if (!token || !data.user) {
+        setError("Respuesta inesperada del servidor.");
+        return;
+      }
+
+      login(token, data.user);
     } catch (err: any) {
-      setError(err.message);
+      setError(err.message || "Credenciales incorrectas");
     } finally {
       setLoading(false);
     }
@@ -42,10 +50,18 @@ export default function LoginPage() {
         color: "#fff",
       }}
     >
+      <Box display="flex" alignItems="center" gap={2} sx={{ mb: 3 }}>
+        <img src={logo} alt="De Grazia Automotores" style={{ width: 48, borderRadius: 8 }} />
+        <Typography variant="h5" sx={{ fontWeight: 700 }}>
+          De Grazia Automotores
+        </Typography>
+      </Box>
+
       <Typography variant="h4" sx={{ mb: 3 }}>
         Login
       </Typography>
-      <form onSubmit={handleSubmit}>
+
+      <form onSubmit={handleSubmit} style={{ width: 360 }}>
         <TextField
           label="Email"
           type="email"
@@ -69,12 +85,7 @@ export default function LoginPage() {
             {error}
           </Typography>
         )}
-        <Button
-          type="submit"
-          variant="contained"
-          fullWidth
-          disabled={loading}
-        >
+        <Button type="submit" variant="contained" fullWidth disabled={loading}>
           {loading ? <CircularProgress size={24} /> : "Iniciar sesión"}
         </Button>
       </form>

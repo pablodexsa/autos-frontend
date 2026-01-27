@@ -1,13 +1,24 @@
 ﻿// src/api/authApi.ts
 import api from "./api";
 
-export async function login(username: string, password: string) {
+export type LoginResponse = {
+  access_token: string;
+  user: {
+    id: number;
+    name: string;
+    email: string;
+    role: any;
+    permissions: string[];
+  };
+};
+
+export async function login(email: string, password: string): Promise<LoginResponse> {
   try {
-    const { data } = await api.post("/auth/login", { username, password });
-    localStorage.setItem("token", data.access_token);
+    const { data } = await api.post<LoginResponse>("/auth/login", { email, password });
+    // ❌ NO guardamos token acá: lo guarda AuthContext cuando llamás login(token, user)
     return data;
   } catch (error: any) {
-    console.error("❌ Error en login:", error);
+    console.error("❌ Error en login:", error?.response?.data || error.message);
     throw new Error(error.response?.data?.message || "Error al iniciar sesión");
   }
 }

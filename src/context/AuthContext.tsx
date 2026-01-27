@@ -4,9 +4,20 @@
   useState,
   useEffect,
   ReactNode,
+  useMemo,
 } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { jwtDecode } from "jwt-decode";
+
+export type PermissionCode =
+  | "CLIENT_CREATE"
+  | "CLIENT_EDIT"
+  | "RESERVATION_APPROVE"
+  | "RESERVATION_CANCEL"
+  | "RESERVATION_EDIT"
+  | "VEHICLE_CREATE"
+  | "VEHICLE_EDIT"
+  | "VEHICLE_DELETE";
 
 interface UserRole {
   id: number;
@@ -17,7 +28,8 @@ interface User {
   id: number;
   name: string;
   email: string;
-  role: UserRole;   // ✅ AHORA ES OBJETO, NO STRING
+  role: UserRole; // se mantiene como objeto
+  permissions: PermissionCode[]; // ✅ NUEVO
 }
 
 interface JwtPayload {
@@ -25,7 +37,7 @@ interface JwtPayload {
   iat?: number;
   sub?: string | number;
   email?: string;
-  role?: any;        // Puede venir string u objeto
+  role?: any;
 }
 
 interface AuthContextType {
@@ -35,6 +47,10 @@ interface AuthContextType {
   logout: () => void;
   isAuthenticated: boolean;
   ready: boolean;
+
+  // ✅ Helpers
+  hasPermission: (permission: PermissionCode) => boolean;
+  hasAnyPermission: (permissions: PermissionCode[]) => boolean;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -44,6 +60,9 @@ const AuthContext = createContext<AuthContextType>({
   logout: () => {},
   isAuthenticated: false,
   ready: false,
+
+  hasPermission: () => false,
+  hasAnyPermission: () => false,
 });
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
@@ -54,30 +73,36 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const navigate = useNavigate();
   const location = useLocation();
 
-  /** ✅ Normalizar rol siempre a objeto { id, name } */
+  /** Normalizar rol siempre a objeto { id, name } */
   const normalizeRole = (role: any): UserRole => {
     if (!role) return { id: 0, name: "" };
 
-    // Si ya es objeto
     if (typeof role === "object") {
-      return { id: role.id, name: role.name };
+      return { id: role.id ?? 0, name: role.name ?? "" };
     }
 
-    // Si es string, convertirlo a objeto sin perder funcionalidad
-    return { id: 0, name: role };
+    return { id: 0, name: String(role) };
   };
 
-  /** ✅ Normalizar usuario siempre al formato correcto */
+  /** Normalizar permisos a array string[] */
+  const normalizePermissions = (raw: any): PermissionCode[] => {
+    const arr = Array.isArray(raw) ? raw : [];
+    // guardamos solo strings
+    return arr.filter((p) => typeof p === "string") as PermissionCode[];
+  };
+
+  /** Normalizar usuario al formato correcto */
   const normalizeUser = (u: any): User => {
     return {
       id: u.id,
       name: u.name,
       email: u.email,
       role: normalizeRole(u.role),
+      permissions: normalizePermissions(u.permissions), // ✅ NUEVO
     };
   };
 
-  /** ✅ Hidratación inicial desde localStorage */
+  /** Hidratación inicial desde localStorage */
   useEffect(() => {
     try {
       const storedToken = localStorage.getItem("token");
@@ -89,7 +114,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
         if (!isExpired) {
           setToken(storedToken);
-          setUser(normalizeUser(JSON.parse(storedUser)));   // ✅ NORMALIZADO
+          setUser(normalizeUser(JSON.parse(storedUser)));
         } else {
           localStorage.removeItem("token");
           localStorage.removeItem("user");
@@ -103,7 +128,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   }, []);
 
-  /** ✅ Sincronizar logout entre pestañas */
+  /** Sincronizar logout entre pestañas */
   useEffect(() => {
     const syncLogout = (e: StorageEvent) => {
       if (e.key === "token" && !e.newValue) {
@@ -116,7 +141,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return () => window.removeEventListener("storage", syncLogout);
   }, [location.pathname, navigate]);
 
-  /** ✅ Login */
+  /** Login */
   const handleLogin = (newToken: string, rawUser: any) => {
     if (!newToken) return;
 
@@ -131,13 +156,24 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     navigate("/home", { replace: true });
   };
 
-  /** ✅ Logout */
+  /** Logout */
   const handleLogout = () => {
     localStorage.removeItem("token");
     localStorage.removeItem("user");
     setToken(null);
     setUser(null);
     if (location.pathname !== "/login") navigate("/login", { replace: true });
+  };
+
+  // ✅ Helpers (memoizados)
+  const permissionsSet = useMemo(() => new Set(user?.permissions ?? []), [user?.permissions]);
+
+  const hasPermission = (permission: PermissionCode) => {
+    return permissionsSet.has(permission);
+  };
+
+  const hasAnyPermission = (permissions: PermissionCode[]) => {
+    return permissions.some((p) => permissionsSet.has(p));
   };
 
   return (
@@ -149,6 +185,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         logout: handleLogout,
         isAuthenticated: !!token,
         ready,
+
+        hasPermission,
+        hasAnyPermission,
       }}
     >
       {children}

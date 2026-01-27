@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState } from "react";
+﻿import React, { useEffect, useMemo, useState } from "react";
 import {
   Box,
   Typography,
@@ -16,6 +16,7 @@ import {
   Dialog,
   DialogTitle,
   DialogContent,
+  DialogActions,
   Snackbar,
   Alert,
 } from "@mui/material";
@@ -27,6 +28,7 @@ import RefreshIcon from "@mui/icons-material/Refresh";
 import { useNavigate } from "react-router-dom";
 import api from "../api/api";
 import { API_URL } from "../config";
+import { useAuth } from "../context/AuthContext";
 
 interface Guarantor {
   firstName: string;
@@ -47,22 +49,35 @@ interface Reservation {
   date: string;
   status: string;
   guarantors?: Guarantor[];
-  sellerName?: string; // viene del backend
+  sellerName?: string;
 }
 
 type AlertState = {
   open: boolean;
   msg: string;
   type: "success" | "error";
-  showRefundsAction?: boolean; // ✅ NUEVO
+  showRefundsAction?: boolean;
+};
+
+type ConfirmAction = {
+  open: boolean;
+  reservationId: number | null;
+  nextStatus: "Aceptada" | "Cancelada" | null;
 };
 
 const ReservationListPage: React.FC = () => {
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [loading, setLoading] = useState(false);
+
   const [openGuarantors, setOpenGuarantors] = useState(false);
   const [selectedGuarantors, setSelectedGuarantors] = useState<Guarantor[]>([]);
   const [selectedReservationId, setSelectedReservationId] = useState<number | null>(null);
+
+  const [confirm, setConfirm] = useState<ConfirmAction>({
+    open: false,
+    reservationId: null,
+    nextStatus: null,
+  });
 
   const [alert, setAlert] = useState<AlertState>({
     open: false,
@@ -72,8 +87,14 @@ const ReservationListPage: React.FC = () => {
   });
 
   const navigate = useNavigate();
+  const { hasPermission } = useAuth();
 
-  // 🔹 Cargar listado de reservas
+  const canApprove = hasPermission("RESERVATION_APPROVE");
+  const canCancel = hasPermission("RESERVATION_CANCEL");
+  const canEdit = hasPermission("RESERVATION_EDIT");
+
+  const isVigente = (status: string) => status === "Vigente";
+
   const fetchReservations = async () => {
     setLoading(true);
     try {
@@ -96,7 +117,6 @@ const ReservationListPage: React.FC = () => {
     fetchReservations();
   }, []);
 
-  // 🔹 Descargar PDF de reserva
   const handleDownloadPDF = async (id: number) => {
     try {
       const reservation = reservations.find((r) => r.id === id);
@@ -119,11 +139,8 @@ const ReservationListPage: React.FC = () => {
       link.click();
       link.remove();
 
-      // Si querés abrirlo en nueva pestaña, dejalo; si no, podés sacar estas 2 líneas.
       window.open(url, "_blank");
       window.URL.revokeObjectURL(url);
-
-      console.log(`✅ Reserva descargada como ${fileName}`);
     } catch (err) {
       console.error("❌ Error al descargar el PDF de la reserva:", err);
       setAlert({
@@ -135,13 +152,20 @@ const ReservationListPage: React.FC = () => {
     }
   };
 
-  // 🔹 Cambiar estado (aceptar o cancelar)
-  const handleUpdateStatus = async (id: number, status: string) => {
+  // ✅ Confirmación antes de ejecutar
+  const askConfirm = (id: number, nextStatus: "Aceptada" | "Cancelada") => {
+    setConfirm({ open: true, reservationId: id, nextStatus });
+  };
+
+  const closeConfirm = () => {
+    setConfirm({ open: false, reservationId: null, nextStatus: null });
+  };
+
+  const handleUpdateStatus = async (id: number, status: "Aceptada" | "Cancelada") => {
     try {
       await api.patch(`/reservations/${id}`, { status });
       await fetchReservations();
 
-      // ✅ Mensaje especial al cancelar (genera devolución pendiente en backend)
       if (status === "Cancelada") {
         setAlert({
           open: true,
@@ -152,7 +176,7 @@ const ReservationListPage: React.FC = () => {
       } else {
         setAlert({
           open: true,
-          msg: "Estado de reserva actualizado correctamente.",
+          msg: "Reserva aceptada correctamente.",
           type: "success",
           showRefundsAction: false,
         });
@@ -168,12 +192,10 @@ const ReservationListPage: React.FC = () => {
     }
   };
 
-  // 🔹 Editar reserva existente
   const handleEdit = (id: number) => {
     navigate(`/reservations/edit/${id}`);
   };
 
-  // 🔹 Mostrar garantes
   const handleOpenGuarantors = (guarantors: Guarantor[], id: number) => {
     setSelectedGuarantors(guarantors);
     setSelectedReservationId(id);
@@ -186,7 +208,6 @@ const ReservationListPage: React.FC = () => {
     setSelectedReservationId(null);
   };
 
-  // 🔹 Forzar expiración de reservas (usa tu endpoint /reservations/expire)
   const handleForceExpire = async () => {
     try {
       setLoading(true);
@@ -210,6 +231,13 @@ const ReservationListPage: React.FC = () => {
       setLoading(false);
     }
   };
+
+  const confirmText = useMemo(() => {
+    if (!confirm.nextStatus) return "";
+    return confirm.nextStatus === "Aceptada"
+      ? "¿Confirmás que querés ACEPTAR esta reserva?"
+      : "¿Confirmás que querés CANCELAR esta reserva? Se generará una devolución pendiente.";
+  }, [confirm.nextStatus]);
 
   return (
     <Box sx={{ p: 3 }}>
@@ -281,6 +309,7 @@ const ReservationListPage: React.FC = () => {
                     <TableCell sx={{ color: "#fff" }}>
                       {r.date ? new Date(r.date).toLocaleDateString("es-AR") : "-"}
                     </TableCell>
+
                     <TableCell
                       sx={{
                         color:
@@ -294,7 +323,6 @@ const ReservationListPage: React.FC = () => {
                       {r.status}
                     </TableCell>
 
-                    {/* Vendedor */}
                     <TableCell sx={{ color: "#fff" }}>{r.sellerName || "Anónimo"}</TableCell>
 
                     <TableCell>
@@ -315,22 +343,45 @@ const ReservationListPage: React.FC = () => {
                       </Tooltip>
                     </TableCell>
 
+                    {/* ✅ ACCIONES SOLO SI ESTÁ VIGENTE */}
                     <TableCell align="center">
-                      <Tooltip title="Aceptar Reserva">
-                        <IconButton onClick={() => handleUpdateStatus(r.id, "Aceptada")}>
-                          <CheckCircleIcon sx={{ color: "#4caf50" }} />
-                        </IconButton>
-                      </Tooltip>
-                      <Tooltip title="Cancelar Reserva">
-                        <IconButton onClick={() => handleUpdateStatus(r.id, "Cancelada")}>
-                          <CancelIcon sx={{ color: "#e53935" }} />
-                        </IconButton>
-                      </Tooltip>
-                      <Tooltip title="Editar Reserva">
-                        <IconButton onClick={() => handleEdit(r.id)}>
-                          <EditIcon sx={{ color: "#2196f3" }} />
-                        </IconButton>
-                      </Tooltip>
+                      {isVigente(r.status) ? (
+                        <>
+                          {canApprove && (
+                            <Tooltip title="Aceptar Reserva">
+                              <IconButton onClick={() => askConfirm(r.id, "Aceptada")}>
+                                <CheckCircleIcon sx={{ color: "#4caf50" }} />
+                              </IconButton>
+                            </Tooltip>
+                          )}
+
+                          {canCancel && (
+                            <Tooltip title="Cancelar Reserva">
+                              <IconButton onClick={() => askConfirm(r.id, "Cancelada")}>
+                                <CancelIcon sx={{ color: "#e53935" }} />
+                              </IconButton>
+                            </Tooltip>
+                          )}
+
+                          {canEdit && (
+                            <Tooltip title="Editar Reserva">
+                              <IconButton onClick={() => handleEdit(r.id)}>
+                                <EditIcon sx={{ color: "#2196f3" }} />
+                              </IconButton>
+                            </Tooltip>
+                          )}
+
+                          {!canApprove && !canCancel && !canEdit && (
+                            <Typography variant="caption" sx={{ color: "#888" }}>
+                              Sin permisos
+                            </Typography>
+                          )}
+                        </>
+                      ) : (
+                        <Typography variant="caption" sx={{ color: "#888" }}>
+                          Sin acciones
+                        </Typography>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -352,7 +403,7 @@ const ReservationListPage: React.FC = () => {
         </Button>
       </Box>
 
-      {/* 🔹 Modal de Garantes */}
+      {/* Modal de Garantes */}
       <Dialog open={openGuarantors} onClose={handleCloseGuarantors} maxWidth="sm" fullWidth>
         <DialogTitle>Garantes de la Reserva #{selectedReservationId}</DialogTitle>
         <DialogContent>
@@ -376,6 +427,7 @@ const ReservationListPage: React.FC = () => {
                 <Typography>DNI: {g.dni}</Typography>
                 {g.address && <Typography>Domicilio: {g.address}</Typography>}
                 {g.phone && <Typography>Teléfono: {g.phone}</Typography>}
+
                 {g.dniFilePath && (
                   <Typography>
                     📎{" "}
@@ -389,6 +441,7 @@ const ReservationListPage: React.FC = () => {
                     </a>
                   </Typography>
                 )}
+
                 {g.payslipFilePath && (
                   <Typography>
                     📎{" "}
@@ -413,7 +466,34 @@ const ReservationListPage: React.FC = () => {
         </Box>
       </Dialog>
 
-      {/* 🔔 Snackbar */}
+      {/* Confirmación Aceptar/Cancelar */}
+      <Dialog open={confirm.open} onClose={closeConfirm}>
+        <DialogTitle>Confirmar acción</DialogTitle>
+        <DialogContent>
+          <Typography>{confirmText}</Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={closeConfirm} variant="outlined">
+            No
+          </Button>
+          <Button
+            onClick={async () => {
+              if (confirm.reservationId && confirm.nextStatus) {
+                const id = confirm.reservationId;
+                const st = confirm.nextStatus;
+                closeConfirm();
+                await handleUpdateStatus(id, st);
+              }
+            }}
+            variant="contained"
+            color={confirm.nextStatus === "Cancelada" ? "error" : "success"}
+          >
+            Sí, confirmar
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Snackbar */}
       <Snackbar
         open={alert.open}
         autoHideDuration={4000}
