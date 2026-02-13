@@ -23,7 +23,7 @@ const Home = () => {
         {/* ✅ Logo principal con fade-in */}
         <motion.img
           src={logo}
-          alt="De Grazia Automotores"
+          alt="GL Motors"
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 1.5, ease: "easeOut" }}
@@ -72,7 +72,7 @@ const Home = () => {
         transition={{ delay: 0.8, duration: 1.2 }}
       >
         <Typography variant="h4" fontWeight={600}>
-          Bienvenido a De Grazia Automotores
+          Bienvenido a GL Motors
         </Typography>
         <Typography variant="subtitle1" sx={{ mt: 1, color: "#aaa" }}>
           Sistema de gestión de ventas, clientes y presupuestos

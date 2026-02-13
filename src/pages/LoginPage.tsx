@@ -51,9 +51,9 @@ export default function LoginPage() {
       }}
     >
       <Box display="flex" alignItems="center" gap={2} sx={{ mb: 3 }}>
-        <img src={logo} alt="De Grazia Automotores" style={{ width: 48, borderRadius: 8 }} />
+        <img src={logo} alt="GL Motors" style={{ width: 48, borderRadius: 8 }} />
         <Typography variant="h5" sx={{ fontWeight: 700 }}>
-          De Grazia Automotores
+          GL Motors
         </Typography>
       </Box>
 

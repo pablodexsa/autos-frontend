@@ -36,8 +36,8 @@ export default function Login() {
   return (
     <div className="login-container">
       <div className="logo-container">
-        <img src={logo} alt="De Grazia Automotores" className="login-logo" />
-        <span className="login-title">De Grazia Automotores</span>
+        <img src={logo} alt="GL Motors" className="login-logo" />
+        <span className="login-title">GL Motors</span>
       </div>
 
       <form className="login-form" onSubmit={handleSubmit}>
@@ -68,7 +68,7 @@ export default function Login() {
       </form>
 
       <footer className="login-footer">
-        <p>De Grazia Automotores © {new Date().getFullYear()}</p>
+        <p>GL Motors © {new Date().getFullYear()}</p>
       </footer>
     </div>
   );

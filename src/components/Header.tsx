@@ -63,7 +63,7 @@ const Header: React.FC<HeaderProps> = ({ handleDrawerToggle }) => {
               display: { xs: "none", sm: "block" },
             }}
           >
-            De Grazia Automotores
+            GL Motors
           </Typography>
         </Box>
 

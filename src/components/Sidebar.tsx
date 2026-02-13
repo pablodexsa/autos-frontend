@@ -74,7 +74,7 @@ const Sidebar: React.FC<SidebarProps> = ({ mobileOpen = false, handleDrawerToggl
     >
       <Toolbar sx={{ justifyContent: "center", borderBottom: "1px solid #333" }}>
         <Typography variant="h6" sx={{ mt: 1, fontWeight: 600 }}>
-          De Grazia Automotores
+          GL Motors
         </Typography>
       </Toolbar>
 

@@ -6,7 +6,7 @@ export function Navbar() {
     <AppBar position="static">
       <Toolbar>
         <Typography variant="h6" sx={{ flexGrow: 1 }}>
-          De Grazia Automotores
+          GL Motors
         </Typography>
         <Button color="inherit" component={RouterLink} to="/">
           Inicio

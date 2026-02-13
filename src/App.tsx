@@ -244,7 +244,7 @@ const App = () => {
                           <Box
                             component="img"
                             src={logo}
-                            alt="De Grazia Automotores"
+                            alt="GL Motors"
                             sx={{
                               width: 200,
                               mb: 3,
@@ -258,7 +258,7 @@ const App = () => {
                             }}
                           />
 
-                          <h1>Bienvenido a De Grazia Automotores</h1>
+                          <h1>Bienvenido a GL Motors</h1>
                           <p>Gestione sus ventas, clientes y presupuestos fácilmente.</p>
                         </Box>
                       </ProtectedRoute>

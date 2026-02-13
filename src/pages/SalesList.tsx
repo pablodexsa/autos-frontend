@@ -112,7 +112,7 @@ const SalesList: React.FC = () => {
   // 📄 Export general de todas las ventas
   const handleExportPDF = () => {
     const doc = new jsPDF();
-    const watermarkText = 'DE GRAZIA AUTOMOTORES';
+    const watermarkText = 'GL Motors';
 
     // 🔹 Marca de agua
     doc.setFontSize(40);
