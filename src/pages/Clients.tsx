@@ -300,19 +300,6 @@ export default function ClientsPage() {
       return;
     }
 
-    // ✅ DNI adjunto obligatorio:
-    // - Creación: siempre
-    // - Edición: si no adjunta nuevo, debe existir uno previo (dniPath)
-    const existingDniPath = Boolean((editing as any)?.dniPath);
-    if (!editing && !dniFile) {
-      alert("Debés adjuntar el DNI del cliente.");
-      return;
-    }
-    if (editing && !dniFile && !existingDniPath) {
-      alert("El cliente no tiene DNI adjunto. Debés adjuntar uno.");
-      return;
-    }
-
     // ✅ Confirmación antes de guardar
     const confirmMsg = editing
       ? "¿Guardar los cambios del cliente?"
@@ -334,8 +321,7 @@ export default function ClientsPage() {
         saved = resp.data;
       }
 
-      // ✅ Subida DNI adjunto (si hay archivo)
-      // ✅ Restricción: subir DNI implica modificar/actualizar info -> solo canEdit/canCreate según modo
+      // ✅ Subida DNI adjunto (si hay archivo) -> AHORA ES OPCIONAL
       if (dniFile && saved?.id) {
         try {
           const fd = new FormData();
@@ -597,19 +583,16 @@ export default function ClientsPage() {
                 required
               />
 
-              {/* ✅ Adjuntar DNI */}
+              {/* ✅ Adjuntar DNI (OPCIONAL) */}
               <div style={{ marginTop: 8 }}>
                 <label style={{ display: "block", marginBottom: 6 }}>
-                  Adjuntar DNI (PDF / imagen)
+                  Adjuntar DNI (PDF / imagen){" "}
+                  <span style={{ opacity: 0.7 }}>(opcional)</span>
                 </label>
                 <input
                   type="file"
                   onChange={(e) => setDniFile(e.target.files?.[0] || null)}
-                  // ✅ requerido al crear; en edición solo si no existe uno previo
-                  required={
-                    !editing ||
-                    (!dniFile && !Boolean((editing as any)?.dniPath))
-                  }
+                  // ✅ ahora NO es obligatorio
                 />
                 {dniFile && (
                   <div style={{ marginTop: 6, opacity: 0.85 }}>
