@@ -43,6 +43,11 @@
     "settings",
   ],
 
+  viewer: [
+    "home",
+    "vehicles",
+  ],
+
   legales: [
     "home",
     "vehicles",
@@ -55,8 +60,4 @@
     "installments",
   ],
 
-  viewer: [
-    "home",
-    "vehicles",
-  ],
 };
