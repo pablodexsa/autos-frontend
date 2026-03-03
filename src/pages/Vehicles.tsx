@@ -15,7 +15,7 @@ import { Brand, Model, Version } from "../types/catalog";
 import "./Vehicles.css";
 import { API_URL } from "../config";
 import api from "../api/api"; // para SSE y documentación
-import { useAuth } from "../context/AuthContext"; // ✅ NUEVO (permisos)
+import { useAuth } from "../context/AuthContext"; // ✅ permisos
 
 const initialQuery: VehicleQuery = {
   page: 1,
@@ -27,12 +27,41 @@ const initialQuery: VehicleQuery = {
 const PROCEDENCIAS = ["Randazzo", "Radatti", "Consignados", "Propios"] as const;
 const CONCESIONARIAS = ["DG", "SyS"] as const;
 
+const CATEGORIES = [
+  { value: "", label: "Tipo" },
+  { value: "CAR", label: "Autos" },
+  { value: "MOTORCYCLE", label: "Motos" },
+] as const;
+
 export default function VehiclesPage() {
   // ✅ PERMISOS
   const { hasPermission } = useAuth();
-  const canCreate = hasPermission("VEHICLE_CREATE");
-  const canEdit = hasPermission("VEHICLE_EDIT");
-  const canDelete = hasPermission("VEHICLE_DELETE");
+
+  // legacy + scoped
+  const canCreate =
+    hasPermission("VEHICLE_CREATE") ||
+    hasPermission("VEHICLE_CREATE_CAR") ||
+    hasPermission("VEHICLE_CREATE_MOTORCYCLE");
+
+  const canCreateCar =
+    hasPermission("VEHICLE_CREATE") || hasPermission("VEHICLE_CREATE_CAR");
+
+  const canCreateMoto =
+    hasPermission("VEHICLE_CREATE") ||
+    hasPermission("VEHICLE_CREATE_MOTORCYCLE");
+
+  // si tiene ambos permisos, puede elegir tipo; si no, queda fijo
+  const canChooseCategoryOnCreate = canCreateCar && canCreateMoto;
+
+  const canEdit =
+    hasPermission("VEHICLE_EDIT") ||
+    hasPermission("VEHICLE_EDIT_CAR") ||
+    hasPermission("VEHICLE_EDIT_MOTORCYCLE");
+
+  const canDelete =
+    hasPermission("VEHICLE_DELETE") ||
+    hasPermission("VEHICLE_DELETE_CAR") ||
+    hasPermission("VEHICLE_DELETE_MOTORCYCLE");
 
   // ======= ESTADO GENERAL =======
   const [query, setQuery] = useState<VehicleQuery>(initialQuery);
@@ -154,9 +183,12 @@ export default function VehiclesPage() {
   const [formVersions, setFormVersions] = useState<Version[]>([]);
   const [formBrandId, setFormBrandId] = useState<number | undefined>(undefined);
   const [formModelId, setFormModelId] = useState<number | undefined>(undefined);
-  const [formVersionId, setFormVersionId] = useState<number | undefined>(
-    undefined
-  );
+  const [formVersionId, setFormVersionId] = useState<
+    number | undefined
+  >(undefined);
+
+  // ✅ NUEVO: categoría (Auto/Moto)
+  const [formCategory, setFormCategory] = useState<"CAR" | "MOTORCYCLE">("CAR");
 
   // 📁 archivo de documentación
   const [docFile, setDocFile] = useState<File | null>(null);
@@ -262,140 +294,17 @@ export default function VehiclesPage() {
     }
   };
 
-  // ======= SUBMIT FORM =======
-  const onSubmit = async (ev: React.FormEvent<HTMLFormElement>) => {
-    ev.preventDefault();
-
-    // ✅ Bloqueo extra (por si alguien intenta abrir el modal manualmente)
-    if (!canCreate && !editing) {
-      alert("No tenés permisos para crear vehículos.");
-      return;
-    }
-    if (!canEdit && editing) {
-      alert("No tenés permisos para editar vehículos.");
-      return;
-    }
-
-    const fd = new FormData(ev.currentTarget);
-    const versionId = formVersionId ? Number(formVersionId) : undefined;
-
-    // ✅ NUEVOS CAMPOS
-    const rawKilometraje = fd.get("kilometraje");
-    const kilometraje =
-      rawKilometraje === null || String(rawKilometraje).trim() === ""
-        ? null
-        : Number(rawKilometraje);
-
-    const concesionariaRaw = String(fd.get("concesionaria") || "").trim();
-    const procedenciaRaw = String(fd.get("procedencia") || "").trim();
-
-    const payload = {
-      versionId,
-      year: Number(fd.get("year") as string),
-
-      // ✅ Kilometraje (después de año)
-      kilometraje,
-
-      plate: String(fd.get("plate") || ""),
-      engineNumber: String(fd.get("engineNumber") || ""),
-      chassisNumber: String(fd.get("chassisNumber") || ""),
-
-      // ✅ Concesionaria (después de chasis)
-      concesionaria: concesionariaRaw ? concesionariaRaw : null,
-
-      // ✅ Procedencia (después de concesionaria)
-      procedencia: procedenciaRaw ? procedenciaRaw : null,
-
-      color: String(fd.get("color") || ""),
-      price: Number(fd.get("price") as string),
-      status: String(fd.get("status") || "available"),
-    };
-
-    if (!payload.versionId) {
-      alert("Seleccioná marca, modelo y versión");
-      return;
-    }
-
-    // Validaciones suaves frontend
-    if (payload.kilometraje !== null && Number.isNaN(payload.kilometraje)) {
-      alert("Kilometraje inválido.");
-      return;
-    }
-    if (
-      payload.concesionaria !== null &&
-      !CONCESIONARIAS.includes(payload.concesionaria as any)
-    ) {
-      alert("Concesionaria inválida.");
-      return;
-    }
-    if (
-      payload.procedencia !== null &&
-      !PROCEDENCIAS.includes(payload.procedencia as any)
-    ) {
-      alert("Procedencia inválida.");
-      return;
-    }
-
-    try {
-      let saved: any;
-      if (editing) {
-        saved = await updateVehicle(editing.id, payload as any);
-      } else {
-        saved = await createVehicle(payload as any);
-      }
-
-      // 📁 si hay documentación, la subimos al endpoint /vehicles/:id/documentation
-      if (docFile && saved?.id) {
-        try {
-          const docFd = new FormData();
-          docFd.append("file", docFile);
-          await api.post(`/vehicles/${saved.id}/documentation`, docFd);
-        } catch (err) {
-          console.error("Error subiendo documentación de vehículo:", err);
-          alert(
-            "El vehículo se guardó, pero hubo un error al subir la documentación."
-          );
-        }
-      }
-
-      setShowForm(false);
-      setEditing(null);
-      setDocFile(null);
-      setFormBrandId(undefined);
-      setFormModelId(undefined);
-      setFormVersionId(undefined);
-      setFormModels([]);
-      setFormVersions([]);
-
-      (ev.target as HTMLFormElement).reset();
-      await fetchData();
-    } catch (e: any) {
-      alert(e?.response?.data?.message || "Error guardando vehículo");
-    }
-  };
-
-  const onDelete = async (v: Vehicle) => {
-    if (!canDelete) {
-      alert("No tenés permisos para eliminar vehículos.");
-      return;
-    }
-    if (!window.confirm(`¿Eliminar ${v.brand} ${v.model} (${v.plate})?`)) return;
-    try {
-      await deleteVehicle(v.id);
-      await fetchData();
-    } catch {
-      alert("Error al eliminar");
-    }
-  };
-
+  // ======= DOCUMENTACIÓN =======
   const handleOpenDocumentation = async (id: number) => {
     try {
-      const resp = await api.get(`/vehicles/${id}/documentation`, {
+      const res = await api.get(`/vehicles/${id}/documentation`, {
         responseType: "blob",
       });
 
-      const blobUrl = window.URL.createObjectURL(resp.data);
-      window.open(blobUrl, "_blank", "noopener,noreferrer");
+      const blob = new Blob([res.data], { type: res.headers["content-type"] });
+      const url = window.URL.createObjectURL(blob);
+      window.open(url, "_blank");
+      setTimeout(() => window.URL.revokeObjectURL(url), 10_000);
     } catch (err: any) {
       if (err?.response?.status === 401) {
         alert("Tu sesión expiró. Volvé a iniciar sesión.");
@@ -414,8 +323,16 @@ export default function VehiclesPage() {
       alert("No tenés permisos para crear vehículos.");
       return;
     }
+
     setEditing(null);
     setDocFile(null);
+
+    // ✅ Si solo puede crear motos => fijo Moto
+    // ✅ Si solo puede crear autos => fijo Auto
+    // ✅ Si puede ambos => default Auto
+    if (canCreateMoto && !canCreateCar) setFormCategory("MOTORCYCLE");
+    else setFormCategory("CAR");
+
     setFormBrandId(undefined);
     setFormModelId(undefined);
     setFormVersionId(undefined);
@@ -435,6 +352,9 @@ export default function VehiclesPage() {
     setDocFile(null);
 
     const anyV = v as any;
+    const existingCategory = (anyV.category || "CAR") as "CAR" | "MOTORCYCLE";
+    setFormCategory(existingCategory);
+
     const brandName = anyV.brand as string | undefined;
     const modelName = anyV.model as string | undefined;
     const versionName = anyV.versionName as string | undefined;
@@ -484,6 +404,109 @@ export default function VehiclesPage() {
     })();
   };
 
+  // ======= SUBMIT FORM =======
+  const onSubmit = async (ev: React.FormEvent<HTMLFormElement>) => {
+    ev.preventDefault();
+
+    if (!canCreate && !editing) {
+      alert("No tenés permisos para crear vehículos.");
+      return;
+    }
+    if (!canEdit && editing) {
+      alert("No tenés permisos para editar vehículos.");
+      return;
+    }
+
+    // ✅ Guardrail: bloquear tipo no permitido en "crear"
+    if (!editing) {
+      if (formCategory === "CAR" && !canCreateCar) {
+        alert("No tenés permisos para crear autos.");
+        return;
+      }
+      if (formCategory === "MOTORCYCLE" && !canCreateMoto) {
+        alert("No tenés permisos para crear motos.");
+        return;
+      }
+    }
+
+    const fd = new FormData(ev.currentTarget);
+    const versionId = formVersionId ? Number(formVersionId) : undefined;
+
+    const rawKilometraje = fd.get("kilometraje");
+    const kilometraje =
+      rawKilometraje === null || String(rawKilometraje).trim() === ""
+        ? null
+        : Number(rawKilometraje);
+
+    const concesionariaRaw = String(fd.get("concesionaria") || "").trim();
+    const procedenciaRaw = String(fd.get("procedencia") || "").trim();
+
+    const payload = {
+      category: formCategory,
+      versionId,
+      year: Number(fd.get("year") as string),
+
+      kilometraje,
+
+      plate: String(fd.get("plate") || ""),
+      engineNumber: String(fd.get("engineNumber") || ""),
+      chassisNumber: String(fd.get("chassisNumber") || ""),
+
+      concesionaria: concesionariaRaw ? concesionariaRaw : null,
+      procedencia: procedenciaRaw ? procedenciaRaw : null,
+
+      color: String(fd.get("color") || ""),
+      price: Number(fd.get("price") as string),
+      status: String(fd.get("status") || "available"),
+    };
+
+    try {
+      let savedId: number | undefined = editing?.id;
+
+      if (editing) {
+        await updateVehicle(editing.id, payload as any);
+      } else {
+        const created = await createVehicle(payload as any);
+        savedId = created?.id;
+      }
+
+      // 📁 Subir documentación si corresponde (en create y update)
+      if (docFile && savedId) {
+        const form = new FormData();
+        form.append("file", docFile);
+
+        await api.post(`/vehicles/${savedId}/documentation`, form, {
+          headers: { "Content-Type": "multipart/form-data" },
+        });
+      }
+
+      setShowForm(false);
+      setEditing(null);
+      setDocFile(null);
+      if (canCreateMoto && !canCreateCar) setFormCategory("MOTORCYCLE");
+      else setFormCategory("CAR");
+      await fetchData();
+    } catch (err) {
+      console.error(err);
+      alert("Error al guardar el vehículo.");
+    }
+  };
+
+  const onDelete = async (v: Vehicle) => {
+    if (!canDelete) {
+      alert("No tenés permisos para eliminar vehículos.");
+      return;
+    }
+    if (!window.confirm("¿Seguro que deseas eliminar este vehículo?")) return;
+    try {
+      await deleteVehicle(v.id);
+      await fetchData();
+    } catch (error) {
+      console.error("Error al eliminar:", error);
+      alert("Error al eliminar el vehículo.");
+    }
+  };
+
   // ======= RENDER =======
   return (
     <div className="vehicles-container">
@@ -491,6 +514,20 @@ export default function VehiclesPage() {
 
       {/* FILTROS PRINCIPALES */}
       <div className="filters-main" style={{ flexWrap: "wrap" }}>
+        {/* ✅ NUEVO: filtro por tipo (Auto/Moto) */}
+        <select
+          value={((query as any).category as string) || ""}
+          onChange={(e) =>
+            setField("category" as any, e.target.value || undefined)
+          }
+        >
+          {CATEGORIES.map((c) => (
+            <option key={c.value} value={c.value}>
+              {c.label}
+            </option>
+          ))}
+        </select>
+
         <select
           value={query.brandId || ""}
           onChange={(e) =>
@@ -587,7 +624,6 @@ export default function VehiclesPage() {
             onChange={(e) => setField("color", e.target.value)}
           />
 
-          {/* ✅ NUEVO FILTRO: Concesionaria */}
           <select
             value={(query as any).concesionaria || ""}
             onChange={(e) =>
@@ -647,12 +683,9 @@ export default function VehiclesPage() {
               <th>Modelo</th>
               <th>Versión</th>
               <th>Año</th>
-
-              {/* ✅ NUEVOS CAMPOS EN LISTA */}
               <th>Kilometraje</th>
               <th>Concesionaria</th>
               <th>Procedencia</th>
-
               <th>Patente</th>
               <th>Color</th>
               <th>Precio</th>
@@ -673,7 +706,6 @@ export default function VehiclesPage() {
                   <td>{anyV.versionName}</td>
                   <td>{v.year}</td>
 
-                  {/* ✅ NUEVOS CAMPOS EN LISTA */}
                   <td>
                     {anyV.kilometraje !== null &&
                     anyV.kilometraje !== undefined &&
@@ -769,6 +801,21 @@ export default function VehiclesPage() {
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <h3>{editing ? "Editar vehículo" : "Nuevo vehículo"}</h3>
             <form onSubmit={onSubmit}>
+              {/* ✅ NUEVO: Tipo (Auto/Moto) */}
+              <select
+                value={formCategory}
+                onChange={(e) =>
+                  setFormCategory(e.target.value as "CAR" | "MOTORCYCLE")
+                }
+                disabled={!canChooseCategoryOnCreate && !editing}
+                required
+              >
+                {(canCreateCar || editing) && <option value="CAR">Auto</option>}
+                {(canCreateMoto || editing) && (
+                  <option value="MOTORCYCLE">Moto</option>
+                )}
+              </select>
+
               {/* Selects dependientes */}
               <div style={{ display: "flex", gap: "6px" }}>
                 <select
@@ -865,7 +912,6 @@ export default function VehiclesPage() {
                 required
               />
 
-              {/* ✅ NUEVO: Kilometraje (después de Año) */}
               <input
                 name="kilometraje"
                 type="number"
@@ -889,17 +935,16 @@ export default function VehiclesPage() {
               <input
                 name="engineNumber"
                 placeholder="N° motor"
-                defaultValue={editing?.engineNumber || ""}
+                defaultValue={(editing as any)?.engineNumber || ""}
                 required
               />
               <input
                 name="chassisNumber"
                 placeholder="N° chasis"
-                defaultValue={editing?.chassisNumber || ""}
+                defaultValue={(editing as any)?.chassisNumber || ""}
                 required
               />
 
-              {/* ✅ NUEVO: Concesionaria (después de N° chasis) */}
               <select
                 name="concesionaria"
                 defaultValue={(editing as any)?.concesionaria ?? ""}
@@ -912,7 +957,6 @@ export default function VehiclesPage() {
                 ))}
               </select>
 
-              {/* ✅ NUEVO: Procedencia (después de Concesionaria) */}
               <select
                 name="procedencia"
                 defaultValue={(editing as any)?.procedencia ?? ""}
@@ -943,7 +987,6 @@ export default function VehiclesPage() {
                 <option value="sold">Vendido</option>
               </select>
 
-              {/* 📁 Campo para documentación */}
               <input
                 type="file"
                 onChange={(e) => setDocFile(e.target.files?.[0] || null)}
@@ -957,6 +1000,11 @@ export default function VehiclesPage() {
                     setShowForm(false);
                     setEditing(null);
                     setDocFile(null);
+
+                    if (canCreateMoto && !canCreateCar)
+                      setFormCategory("MOTORCYCLE");
+                    else setFormCategory("CAR");
+
                     setFormBrandId(undefined);
                     setFormModelId(undefined);
                     setFormVersionId(undefined);

@@ -29,6 +29,30 @@
     "sales",
   ],
 
+  // ✅ NUEVO: vendedor de motos (mismo acceso funcional que vendedor, pero backend filtra motos)
+  vendedor_motos: [
+    "home",
+    "vehicles",
+    "clients",
+    "budgets",
+    "budget-reports",
+    "reservations",
+    "reservation-list",
+    "sales",
+  ],
+
+  // ✅ NUEVO: vendedor de autos (mismo acceso funcional que vendedor, pero backend filtra motos)
+  vendedor_autos: [
+    "home",
+    "vehicles",
+    "clients",
+    "budgets",
+    "budget-reports",
+    "reservations",
+    "reservation-list",
+    "sales",
+  ],
+
   gerencia: [
     "home",
     "vehicles",
@@ -59,5 +83,4 @@
     "installment-payments",
     "installments",
   ],
-
 };
