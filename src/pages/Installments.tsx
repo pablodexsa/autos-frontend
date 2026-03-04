@@ -20,13 +20,11 @@ import {
   TablePagination,
 } from "@mui/material";
 import { AttachFile, Visibility, CheckCircle } from "@mui/icons-material";
-import {
-  listInstallments,
-  registerInstallmentPayment,
-} from "../api/installments";
+import { listInstallments, registerInstallmentPayment } from "../api/installments";
 import { createInstallmentPayment } from "../api/installmentPayments";
 import api from "../api/api";
 import NotificationSnackbar from "../components/NotificationSnackbar";
+import { formatDateAR } from "../utils/date";
 import "../styles/Installments.css";
 
 type Order = "asc" | "desc";
@@ -38,175 +36,152 @@ type StatusCode =
   | "PARTIAL"
   | "PARTIAL_OVERDUE";
 
-export default function Installments() {
-  const [installments, setInstallments] = useState<any[]>([]);
-  const [open, setOpen] = useState(false);
-  const [selectedInstallment, setSelectedInstallment] = useState<number | null>(
-    null
-  );
-  const [form, setForm] = useState({
-    amount: "",
-    paymentDate: "",
-    file: null as File | null,
-    receiver: "AGENCY" as "AGENCY" | "STUDIO",
-    observations: "",
-  });
+type SnackbarSeverity = "success" | "error" | "warning" | "info";
 
+const Installments: React.FC = () => {
+  const [installments, setInstallments] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  const [openPaymentDialog, setOpenPaymentDialog] = useState(false);
+  const [selectedInstallmentId, setSelectedInstallmentId] = useState<number | null>(null);
+
+  const [paymentAmount, setPaymentAmount] = useState<string>("");
+  const [paymentDate, setPaymentDate] = useState<string>("");
+  const [receiptFile, setReceiptFile] = useState<File | null>(null);
+
+  const [snackbarOpen, setSnackbarOpen] = useState(false);
+  const [snackbarMessage, setSnackbarMessage] = useState("");
+  const [snackbarSeverity, setSnackbarSeverity] = useState<SnackbarSeverity>("success");
+
+  // 📌 Table state
+  const [order, setOrder] = useState<Order>("asc");
+  const [orderBy, setOrderBy] = useState<
+    "installmentLabel" | "client" | "vehiclePlate" | "amount" | "dueDate" | "status"
+  >("dueDate");
+
+  // Paginación
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
+
+  // Filtros
   const [filters, setFilters] = useState<{
     client: string;
     status: "" | StatusCode;
-    dueDate: string;
+    dueDate: string; // "YYYY-MM-DD"
   }>({
     client: "",
     status: "",
     dueDate: "",
   });
 
-  const [order, setOrder] = useState<Order>("asc");
-  const [orderBy, setOrderBy] = useState<
-    "installmentLabel" | "client" | "amount" | "dueDate" | "status"
-  >("dueDate");
-
-  const [page, setPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(10);
-
-  const [snackbar, setSnackbar] = useState({
-    open: false,
-    message: "",
-    severity: "info" as "success" | "error" | "warning" | "info",
-  });
-
-  const showSnackbar = (
-    message: string,
-    severity: "success" | "error" | "warning" | "info" = "info"
-  ) => setSnackbar({ open: true, message, severity });
-
-  const handleCloseSnackbar = () =>
-    setSnackbar({ ...snackbar, open: false, message: "" });
-
   const fetchInstallments = async () => {
-    const data = await listInstallments();
-    console.log("🔥 DATA QUE LLEGA DESDE EL BACK:", data);
-    setInstallments(data);
+    try {
+      setLoading(true);
+      const data = await listInstallments();
+      setInstallments(data || []);
+    } catch (err) {
+      setSnackbarSeverity("error");
+      setSnackbarMessage("Error cargando cuotas");
+      setSnackbarOpen(true);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
     fetchInstallments();
   }, []);
 
+  const handleCloseSnackbar = () => setSnackbarOpen(false);
+
   const handleOpenPayment = (installmentId: number) => {
-    setSelectedInstallment(installmentId);
-    setOpen(true);
+    setSelectedInstallmentId(installmentId);
+    setPaymentAmount("");
+    setPaymentDate("");
+    setReceiptFile(null);
+    setOpenPaymentDialog(true);
   };
 
-const handleSubmitPayment = async () => {
-  if (!selectedInstallment) return;
-
-  const inst = installments.find(
-    (it) => it.id === selectedInstallment
-  );
-
-  if (!inst) {
-    showSnackbar("No se encontró la cuota seleccionada", "error");
-    return;
-  }
-
-  const rawAmount = Number(form.amount);
-  if (!rawAmount || rawAmount <= 0) {
-    showSnackbar("Ingresá un monto válido", "warning");
-    return;
-  }
-
-  // Máximo permitido: primero currentAmount (con interés),
-  // si no está, usamos remainingAmount o amount.
-  const maxPayable = Number(
-    inst.currentAmount ??
-      inst.remainingAmount ??
-      inst.amount ??
-      0
-  );
-
-  if (maxPayable <= 0) {
-    showSnackbar(
-      "La cuota no tiene saldo pendiente para pagar",
-      "warning"
-    );
-    return;
-  }
-
-  if (rawAmount > maxPayable + 0.01) {
-    showSnackbar(
-      `El monto no puede superar el valor actual de la cuota ($ ${maxPayable.toLocaleString()})`,
-      "warning"
-    );
-    return;
-  }
-
-  try {
-    // 1) Crear registro de pago (archivo, etc.)
-    const formData = new FormData();
-    formData.append("installmentId", String(selectedInstallment));
-    formData.append("amount", String(rawAmount));
-    formData.append("paymentDate", form.paymentDate);
-    if (form.file) formData.append("file", form.file);
-
-    await createInstallmentPayment(formData);
-
-    // 2) Aplicar pago sobre la cuota
-    await registerInstallmentPayment(selectedInstallment, {
-      amount: rawAmount,
-      paymentDate: form.paymentDate,
-      receiver: form.receiver,
-      observations: form.observations.trim() || undefined,
-    });
-
-    setOpen(false);
-    setForm({
-      amount: "",
-      paymentDate: "",
-      file: null,
-      receiver: "AGENCY",
-      observations: "",
-    });
-    fetchInstallments();
-    showSnackbar("Pago registrado con éxito", "success");
-  } catch (e) {
-    console.error(e);
-    showSnackbar("Error al registrar el pago", "error");
-  }
-};
-
+  const handleClosePayment = () => {
+    setOpenPaymentDialog(false);
+    setSelectedInstallmentId(null);
+  };
 
   const handleOpenReceipt = async (paymentId: number) => {
     try {
-      const response = await api.get(
-        `/installment-payments/${paymentId}/receipt`,
-        {
-          responseType: "blob",
-        }
-      );
-      const blob = new Blob([response.data], {
-        type: response.headers["content-type"],
+      const res = await api.get(`/installment-payments/${paymentId}/receipt`, {
+        responseType: "blob",
       });
-      const url = window.URL.createObjectURL(blob);
+      const url = window.URL.createObjectURL(res.data);
       window.open(url, "_blank");
-    } catch (e) {
-      console.error(e);
-      showSnackbar("No se pudo abrir el comprobante", "warning");
+    } catch (err) {
+      setSnackbarSeverity("error");
+      setSnackbarMessage("No se pudo abrir el comprobante");
+      setSnackbarOpen(true);
     }
   };
 
-  const handleChangePage = (_: unknown, newPage: number) => setPage(newPage);
-  const handleChangeRowsPerPage = (
-    event: React.ChangeEvent<HTMLInputElement>
-  ) => {
-    setRowsPerPage(parseInt(event.target.value, 10));
-    setPage(0);
+  const handlePaymentSubmit = async () => {
+    if (!selectedInstallmentId) return;
+
+    try {
+      if (!paymentAmount || Number(paymentAmount) <= 0) {
+        setSnackbarSeverity("warning");
+        setSnackbarMessage("Ingresá un monto válido");
+        setSnackbarOpen(true);
+        return;
+      }
+
+      if (!paymentDate) {
+        setSnackbarSeverity("warning");
+        setSnackbarMessage("Ingresá una fecha de pago");
+        setSnackbarOpen(true);
+        return;
+      }
+
+      setLoading(true);
+
+      const payload = {
+        installmentId: selectedInstallmentId,
+        amount: Number(paymentAmount),
+        paymentDate,
+      };
+
+      let paymentId: number | null = null;
+
+      // Si hay archivo, usar endpoint con multipart
+      if (receiptFile) {
+        const formData = new FormData();
+        formData.append("amount", String(payload.amount));
+        formData.append("paymentDate", payload.paymentDate);
+        formData.append("receipt", receiptFile);
+
+        const created = await createInstallmentPayment(selectedInstallmentId, formData);
+        paymentId = created?.id ?? null;
+      } else {
+        const created = await registerInstallmentPayment(payload);
+        paymentId = created?.id ?? null;
+      }
+
+      setSnackbarSeverity("success");
+      setSnackbarMessage("Pago registrado correctamente");
+      setSnackbarOpen(true);
+
+      await fetchInstallments();
+      handleClosePayment();
+    } catch (err: any) {
+      setSnackbarSeverity("error");
+      setSnackbarMessage(err?.response?.data?.mensaje || "Error registrando pago");
+      setSnackbarOpen(true);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const getClientName = (i: any) => {
-    const c = i.client || i.sale?.client;
-    return c ? `${c.firstName ?? ""} ${c.lastName ?? ""}`.trim() : "";
+    const c = i.client ?? i.sale?.client;
+    if (!c) return "—";
+    return `${c.firstName ?? ""} ${c.lastName ?? ""}`.trim() || "—";
   };
 
   const getVehiclePlate = (i: any) => {
@@ -219,21 +194,34 @@ const handleSubmitPayment = async () => {
     return Number(i.remainingAmount) < Number(i.amount);
   };
 
+  // Helpers de fecha (evitan corrimiento por timezone)
+  const pad2 = (n: number) => String(n).padStart(2, "0");
+
+  // Devuelve "YYYY-MM-DD" sin pasar por Date() cuando viene string ISO
+  const toISODate = (value: any): string => {
+    if (!value) return "";
+    if (typeof value === "string") {
+      const s = value;
+      // "2026-05-05" o "2026-05-05T00:00:00.000Z"
+      return s.includes("T") ? s.slice(0, 10) : s.slice(0, 10);
+    }
+    if (value instanceof Date) {
+      // Usa fecha local (lo que ve el usuario)
+      return `${value.getFullYear()}-${pad2(value.getMonth() + 1)}-${pad2(value.getDate())}`;
+    }
+    const s = String(value);
+    return s.includes("T") ? s.slice(0, 10) : s.slice(0, 10);
+  };
+
   // ✅ cálculo robusto de vencimiento (evita problemas de timezone)
   const isOverdueRow = (i: any) => {
     if (i.paid) return false;
     if (!i.dueDate) return false;
 
-    let dueStr: string;
-    if (typeof i.dueDate === "string") {
-      dueStr = i.dueDate.slice(0, 10); // "YYYY-MM-DD"
-    } else {
-      dueStr = new Date(i.dueDate).toISOString().slice(0, 10);
-    }
+    const dueStr = toISODate(i.dueDate);
+    const todayStr = toISODate(new Date());
 
-    const todayStr = new Date().toISOString().slice(0, 10);
-
-    return dueStr < todayStr;
+    return !!dueStr && dueStr < todayStr;
   };
 
   // Código interno de estado para filtros y visualización
@@ -262,7 +250,7 @@ const handleSubmitPayment = async () => {
       case "PARTIAL":
         return "Parcial";
       case "PARTIAL_OVERDUE":
-        return "Parcial vencida";
+        return "Parcial + Vencida";
       default:
         return "Pendiente";
     }
@@ -281,13 +269,18 @@ const handleSubmitPayment = async () => {
         av = getClientName(a).toLowerCase();
         bv = getClientName(b).toLowerCase();
         break;
+      case "vehiclePlate":
+        av = getVehiclePlate(a).toLowerCase();
+        bv = getVehiclePlate(b).toLowerCase();
+        break;
       case "amount":
         av = Number(a.currentAmount ?? a.amount ?? 0);
         bv = Number(b.currentAmount ?? b.amount ?? 0);
         break;
       case "dueDate":
-        av = new Date(a.dueDate).getTime();
-        bv = new Date(b.dueDate).getTime();
+        // Comparación lexicográfica funciona con YYYY-MM-DD
+        av = toISODate(a.dueDate);
+        bv = toISODate(b.dueDate);
         break;
       case "status":
         av = getStatusCode(a);
@@ -314,18 +307,14 @@ const handleSubmitPayment = async () => {
     .filter((i) => {
       const q = (filters.client || "").trim().toLowerCase();
       const name = getClientName(i).toLowerCase();
-      const dni = String(
-        i.client?.dni ?? i.sale?.client?.dni ?? ""
-      ).toLowerCase();
+      const dni = String(i.client?.dni ?? i.sale?.client?.dni ?? "").toLowerCase();
 
       const matchesClient = !q || name.includes(q) || dni.includes(q);
 
       const statusCode = getStatusCode(i);
-      const matchesStatus =
-        !filters.status || statusCode === filters.status;
+      const matchesStatus = !filters.status || statusCode === filters.status;
 
-      const due = i.dueDate ? new Date(i.dueDate) : null;
-      const dueISO = due ? due.toISOString().slice(0, 10) : "";
+      const dueISO = toISODate(i.dueDate);
       const matchesDueDate = !filters.dueDate || dueISO === filters.dueDate;
 
       return matchesClient && matchesStatus && matchesDueDate;
@@ -338,6 +327,8 @@ const handleSubmitPayment = async () => {
 
   const start = page * rowsPerPage + 1;
   const end = Math.min(start + rowsPerPage - 1, filteredSorted.length);
+
+  const paginated = filteredSorted.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
 
   return (
     <Box className="installments-container">
@@ -360,9 +351,7 @@ const handleSubmitPayment = async () => {
               fullWidth
               label="Cliente (nombre / DNI)"
               value={filters.client}
-              onChange={(e) =>
-                setFilters({ ...filters, client: e.target.value })
-              }
+              onChange={(e) => setFilters({ ...filters, client: e.target.value })}
             />
           </Grid>
 
@@ -383,62 +372,68 @@ const handleSubmitPayment = async () => {
               <MenuItem value="PENDING">Pendiente</MenuItem>
               <MenuItem value="OVERDUE">Vencida</MenuItem>
               <MenuItem value="PARTIAL">Parcial</MenuItem>
-              <MenuItem value="PARTIAL_OVERDUE">Parcial vencida</MenuItem>
+              <MenuItem value="PARTIAL_OVERDUE">Parcial + Vencida</MenuItem>
               <MenuItem value="PAID">Pagada</MenuItem>
             </TextField>
           </Grid>
 
-          <Grid item xs={12} md={3}>
+          <Grid item xs={12} md={4}>
             <TextField
-              type="date"
               fullWidth
-              label="Vence en (fecha exacta)"
+              type="date"
+              label="Vencimiento"
               InputLabelProps={{ shrink: true }}
               value={filters.dueDate}
-              onChange={(e) =>
-                setFilters({ ...filters, dueDate: e.target.value })
-              }
+              onChange={(e) => setFilters({ ...filters, dueDate: e.target.value })}
             />
-          </Grid>
-
-          <Grid
-            item
-            xs={12}
-            md={1}
-            sx={{ display: "flex", alignItems: "center" }}
-          >
-            <Button
-              fullWidth
-              variant="outlined"
-              onClick={() =>
-                setFilters({ client: "", status: "", dueDate: "" })
-              }
-            >
-              Limpiar
-            </Button>
           </Grid>
         </Grid>
       </Paper>
 
       {/* Tabla */}
-      <Paper className="table-container" sx={{ mt: 3 }}>
+      <Paper
+        sx={{
+          mt: 3,
+          backgroundColor: "#1e1e2f",
+          border: "1px solid rgba(255,255,255,0.08)",
+          overflow: "hidden",
+        }}
+      >
         <Table>
           <TableHead>
             <TableRow>
-              <TableCell>Cuota</TableCell>
-              <TableCell>Cliente</TableCell>
-              <TableCell>Patente</TableCell>
-              <TableCell>Monto</TableCell>
-              <TableCell>Vencimiento</TableCell>
-              <TableCell>Estado</TableCell>
+              <TableCell onClick={() => handleRequestSort("installmentLabel")} sx={{ cursor: "pointer" }}>
+                Cuota
+              </TableCell>
+              <TableCell onClick={() => handleRequestSort("client")} sx={{ cursor: "pointer" }}>
+                Cliente
+              </TableCell>
+              <TableCell onClick={() => handleRequestSort("vehiclePlate")} sx={{ cursor: "pointer" }}>
+                Vehículo
+              </TableCell>
+              <TableCell onClick={() => handleRequestSort("amount")} sx={{ cursor: "pointer" }}>
+                Monto
+              </TableCell>
+              <TableCell onClick={() => handleRequestSort("dueDate")} sx={{ cursor: "pointer" }}>
+                Vencimiento
+              </TableCell>
+              <TableCell onClick={() => handleRequestSort("status")} sx={{ cursor: "pointer" }}>
+                Estado
+              </TableCell>
               <TableCell>Comprobante</TableCell>
               <TableCell>Acciones</TableCell>
             </TableRow>
           </TableHead>
+
           <TableBody>
-            {filteredSorted
-              .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
-              .map((i) => (
+            {paginated.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={8} sx={{ color: "#fff" }}>
+                  {loading ? "Cargando..." : "No hay cuotas para mostrar"}
+                </TableCell>
+              </TableRow>
+            ) : (
+              paginated.map((i) => (
                 <TableRow
                   key={i.id}
                   sx={
@@ -454,20 +449,11 @@ const handleSubmitPayment = async () => {
                 >
                   <TableCell>{i.installmentLabel ?? "—"}</TableCell>
                   <TableCell>
-                    {i.client
-                      ? `${i.client.firstName} ${i.client.lastName}`
-                      : "—"}
+                    {i.client ? `${i.client.firstName} ${i.client.lastName}` : "—"}
                   </TableCell>
-<TableCell>{i.vehicle?.plate ?? "—"}</TableCell>
-                  <TableCell>
-                    $
-                    {Number(i.currentAmount ?? i.amount ?? 0).toLocaleString()}
-                  </TableCell>
-                  <TableCell>
-                    {i.dueDate
-                      ? new Date(i.dueDate).toLocaleDateString()
-                      : "—"}
-                  </TableCell>
+                  <TableCell>{i.vehicle?.plate ?? "—"}</TableCell>
+                  <TableCell>${Number(i.currentAmount ?? i.amount ?? 0).toLocaleString()}</TableCell>
+                  <TableCell>{i.dueDate ? formatDateAR(i.dueDate) : "—"}</TableCell>
                   <TableCell>{getStatusLabel(i)}</TableCell>
                   <TableCell>
                     {i.payment?.id ? (
@@ -484,14 +470,9 @@ const handleSubmitPayment = async () => {
                   </TableCell>
                   <TableCell>
                     {i.paid ? (
-                      <Box
-                        sx={{ display: "flex", alignItems: "center", gap: 1 }}
-                      >
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                         <CheckCircle sx={{ color: "#2e7d32" }} />
-                        <Typography
-                          variant="body2"
-                          sx={{ color: "#2e7d32", fontWeight: 600 }}
-                        >
+                        <Typography variant="body2" sx={{ color: "#2e7d32", fontWeight: 600 }}>
                           Pagada
                         </Typography>
                       </Box>
@@ -516,127 +497,87 @@ const handleSubmitPayment = async () => {
                     )}
                   </TableCell>
                 </TableRow>
-              ))}
+              ))
+            )}
           </TableBody>
         </Table>
 
-        <Box
-          display="flex"
-          alignItems="center"
-          justifyContent="space-between"
-          sx={{ px: 2, py: 1 }}
-        >
-          <Typography variant="body2" color="#ccc">
-            Mostrando {start}-{end} de {filteredSorted.length} cuotas
+        <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", px: 2 }}>
+          <Typography variant="body2" sx={{ color: "#fff", py: 1 }}>
+            Mostrando {filteredSorted.length === 0 ? 0 : start}–{filteredSorted.length === 0 ? 0 : end} de{" "}
+            {filteredSorted.length}
           </Typography>
+
           <TablePagination
             component="div"
             count={filteredSorted.length}
             page={page}
-            onPageChange={handleChangePage}
+            onPageChange={(_, newPage) => setPage(newPage)}
             rowsPerPage={rowsPerPage}
-            onRowsPerPageChange={handleChangeRowsPerPage}
+            onRowsPerPageChange={(e) => {
+              setRowsPerPage(parseInt(e.target.value, 10));
+              setPage(0);
+            }}
             rowsPerPageOptions={[5, 10, 25, 50]}
-            labelRowsPerPage="Filas por página"
           />
         </Box>
       </Paper>
 
-      {/* Modal de pago */}
-      <Dialog open={open} onClose={() => setOpen(false)}>
-        <DialogTitle>Registrar Pago</DialogTitle>
+      {/* Dialog pago */}
+      <Dialog open={openPaymentDialog} onClose={handleClosePayment} maxWidth="sm" fullWidth>
+        <DialogTitle>Registrar pago</DialogTitle>
         <DialogContent>
-          <TextField
-            label="Monto"
-            type="number"
-            fullWidth
-            margin="normal"
-            value={form.amount}
-            onChange={(e) => setForm({ ...form, amount: e.target.value })}
-          />
-          <TextField
-            label="Fecha de Pago"
-            type="date"
-            fullWidth
-            margin="normal"
-            InputLabelProps={{ shrink: true }}
-            value={form.paymentDate}
-            onChange={(e) =>
-              setForm({ ...form, paymentDate: e.target.value })
-            }
-          />
-
-          <TextField
-            select
-            label="Recibe"
-            fullWidth
-            margin="normal"
-            value={form.receiver}
-            onChange={(e) =>
-              setForm({
-                ...form,
-                receiver: e.target.value as "AGENCY" | "STUDIO",
-              })
-            }
-          >
-            <MenuItem value="AGENCY">Agencia</MenuItem>
-            <MenuItem value="STUDIO">Estudio</MenuItem>
-          </TextField>
-
-          <TextField
-            label="Observaciones"
-            fullWidth
-            multiline
-            minRows={3}
-            margin="normal"
-            value={form.observations}
-            onChange={(e) =>
-              setForm({ ...form, observations: e.target.value })
-            }
-          />
-
-          <Button
-            variant="outlined"
-            component="label"
-            startIcon={<AttachFile />}
-            fullWidth
-            sx={{ mt: 2 }}
-          >
-            Subir Comprobante
-            <input
-              type="file"
-              hidden
-              onChange={(e) =>
-                setForm({ ...form, file: e.target.files?.[0] || null })
-              }
+          <Box sx={{ display: "flex", flexDirection: "column", gap: 2, mt: 1 }}>
+            <TextField
+              label="Monto"
+              type="number"
+              value={paymentAmount}
+              onChange={(e) => setPaymentAmount(e.target.value)}
+              fullWidth
             />
-          </Button>
-          {form.file && (
-            <Typography variant="body2" sx={{ mt: 1 }}>
-              {form.file.name}
-            </Typography>
-          )}
+            <TextField
+              label="Fecha de pago"
+              type="date"
+              value={paymentDate}
+              onChange={(e) => setPaymentDate(e.target.value)}
+              InputLabelProps={{ shrink: true }}
+              fullWidth
+            />
+
+            <Button
+              variant="outlined"
+              component="label"
+              startIcon={<AttachFile />}
+              sx={{ justifyContent: "flex-start" }}
+            >
+              {receiptFile ? receiptFile.name : "Adjuntar comprobante (opcional)"}
+              <input
+                hidden
+                type="file"
+                accept="image/*,application/pdf"
+                onChange={(e) => setReceiptFile(e.target.files?.[0] ?? null)}
+              />
+            </Button>
+          </Box>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setOpen(false)} color="inherit">
+          <Button onClick={handleClosePayment} disabled={loading}>
             Cancelar
           </Button>
-          <Button
-            onClick={handleSubmitPayment}
-            variant="contained"
-            color="success"
-          >
-            Confirmar Pago
+          <Button onClick={handlePaymentSubmit} variant="contained" disabled={loading}>
+            Guardar
           </Button>
         </DialogActions>
       </Dialog>
 
       <NotificationSnackbar
-        open={snackbar.open}
-        message={snackbar.message}
-        severity={snackbar.severity}
+        open={snackbarOpen}
         onClose={handleCloseSnackbar}
+        message={snackbarMessage}
+        severity={snackbarSeverity}
       />
     </Box>
   );
-}
+};
+
+export default Installments;
