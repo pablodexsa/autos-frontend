@@ -152,9 +152,7 @@ export default function VehiclesPage() {
   // ======= STREAM REALTIME (SSE) =======
   const esRef = useRef<EventSource | null>(null);
   useEffect(() => {
-    const es = new EventSource(`${API_URL}/vehicles/stream`, {
-      withCredentials: false,
-    });
+    const es = new EventSource(`${API_URL}/vehicles/stream`);
     es.onmessage = () => fetchData();
     es.onerror = (err) => console.warn("❌ Error SSE:", err);
     esRef.current = es;

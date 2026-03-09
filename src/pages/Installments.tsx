@@ -53,21 +53,18 @@ const Installments: React.FC = () => {
   const [snackbarMessage, setSnackbarMessage] = useState("");
   const [snackbarSeverity, setSnackbarSeverity] = useState<SnackbarSeverity>("success");
 
-  // 📌 Table state
   const [order, setOrder] = useState<Order>("asc");
   const [orderBy, setOrderBy] = useState<
     "installmentLabel" | "client" | "vehiclePlate" | "amount" | "dueDate" | "status"
   >("dueDate");
 
-  // Paginación
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
 
-  // Filtros
   const [filters, setFilters] = useState<{
     client: string;
     status: "" | StatusCode;
-    dueDate: string; // "YYYY-MM-DD"
+    dueDate: string;
   }>({
     client: "",
     status: "",
@@ -122,7 +119,7 @@ const Installments: React.FC = () => {
   };
 
   const handlePaymentSubmit = async () => {
-    if (!selectedInstallmentId) return;
+    if (selectedInstallmentId == null) return;
 
     try {
       if (!paymentAmount || Number(paymentAmount) <= 0) {
@@ -141,26 +138,23 @@ const Installments: React.FC = () => {
 
       setLoading(true);
 
-      const payload = {
-        installmentId: selectedInstallmentId,
-        amount: Number(paymentAmount),
-        paymentDate,
-      };
+      const amount = Number(paymentAmount);
 
-      let paymentId: number | null = null;
-
-      // Si hay archivo, usar endpoint con multipart
       if (receiptFile) {
         const formData = new FormData();
-        formData.append("amount", String(payload.amount));
-        formData.append("paymentDate", payload.paymentDate);
+        formData.append("installmentId", String(selectedInstallmentId));
+        formData.append("amount", String(amount));
+        formData.append("paymentDate", paymentDate);
+        formData.append("receiver", "AGENCY");
         formData.append("receipt", receiptFile);
 
-        const created = await createInstallmentPayment(selectedInstallmentId, formData);
-        paymentId = created?.id ?? null;
+        await createInstallmentPayment(formData);
       } else {
-        const created = await registerInstallmentPayment(payload);
-        paymentId = created?.id ?? null;
+        await registerInstallmentPayment(selectedInstallmentId, {
+          amount,
+          paymentDate,
+          receiver: "AGENCY",
+        });
       }
 
       setSnackbarSeverity("success");
@@ -170,8 +164,13 @@ const Installments: React.FC = () => {
       await fetchInstallments();
       handleClosePayment();
     } catch (err: any) {
+      console.error("Error registrando pago:", err?.response?.data || err);
       setSnackbarSeverity("error");
-      setSnackbarMessage(err?.response?.data?.mensaje || "Error registrando pago");
+      setSnackbarMessage(
+        err?.response?.data?.message ||
+          err?.response?.data?.mensaje ||
+          "Error registrando pago"
+      );
       setSnackbarOpen(true);
     } finally {
       setLoading(false);
@@ -194,26 +193,21 @@ const Installments: React.FC = () => {
     return Number(i.remainingAmount) < Number(i.amount);
   };
 
-  // Helpers de fecha (evitan corrimiento por timezone)
   const pad2 = (n: number) => String(n).padStart(2, "0");
 
-  // Devuelve "YYYY-MM-DD" sin pasar por Date() cuando viene string ISO
   const toISODate = (value: any): string => {
     if (!value) return "";
     if (typeof value === "string") {
       const s = value;
-      // "2026-05-05" o "2026-05-05T00:00:00.000Z"
       return s.includes("T") ? s.slice(0, 10) : s.slice(0, 10);
     }
     if (value instanceof Date) {
-      // Usa fecha local (lo que ve el usuario)
       return `${value.getFullYear()}-${pad2(value.getMonth() + 1)}-${pad2(value.getDate())}`;
     }
     const s = String(value);
     return s.includes("T") ? s.slice(0, 10) : s.slice(0, 10);
   };
 
-  // ✅ cálculo robusto de vencimiento (evita problemas de timezone)
   const isOverdueRow = (i: any) => {
     if (i.paid) return false;
     if (!i.dueDate) return false;
@@ -224,7 +218,6 @@ const Installments: React.FC = () => {
     return !!dueStr && dueStr < todayStr;
   };
 
-  // Código interno de estado para filtros y visualización
   const getStatusCode = (i: any): StatusCode => {
     if (i.paid) return "PAID";
 
@@ -278,7 +271,6 @@ const Installments: React.FC = () => {
         bv = Number(b.currentAmount ?? b.amount ?? 0);
         break;
       case "dueDate":
-        // Comparación lexicográfica funciona con YYYY-MM-DD
         av = toISODate(a.dueDate);
         bv = toISODate(b.dueDate);
         break;
@@ -302,7 +294,6 @@ const Installments: React.FC = () => {
     setOrderBy(property);
   };
 
-  // ✅ Filtrado + Orden (antes de paginar)
   const filteredSorted = [...installments]
     .filter((i) => {
       const q = (filters.client || "").trim().toLowerCase();
@@ -336,7 +327,6 @@ const Installments: React.FC = () => {
         Cuotas
       </Typography>
 
-      {/* Filtros */}
       <Paper
         sx={{
           p: 2,
@@ -390,7 +380,6 @@ const Installments: React.FC = () => {
         </Grid>
       </Paper>
 
-      {/* Tabla */}
       <Paper
         sx={{
           mt: 3,
@@ -523,7 +512,6 @@ const Installments: React.FC = () => {
         </Box>
       </Paper>
 
-      {/* Dialog pago */}
       <Dialog open={openPaymentDialog} onClose={handleClosePayment} maxWidth="sm" fullWidth>
         <DialogTitle>Registrar pago</DialogTitle>
         <DialogContent>

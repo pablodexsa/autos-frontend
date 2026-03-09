@@ -429,19 +429,19 @@ const ReservationsPage: React.FC = () => {
                 <Typography variant="body2" sx={{ mb: 1 }}>
                   Fotocopia DNI:
                 </Typography>
-                {g.dniFilePath && (
-                  <Typography variant="body2" sx={{ mb: 1 }}>
-                    📎{" "}
-                    <Link
-                      href={`${API_URL.replace("/api", "")}${g.dniFilePath}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      color="#00BFA5"
-                    >
-                      Ver archivo existente
-                    </Link>
-                  </Typography>
-                )}
+{g.dniFilePath && (
+  <Typography variant="body2" sx={{ mb: 1 }}>
+    📎{" "}
+    <a
+      href={g.dniFilePath}
+      target="_blank"
+      rel="noopener noreferrer"
+      style={{ color: "#00BFA5", textDecoration: "none" }}
+    >
+      Ver archivo existente
+    </a>
+  </Typography>
+)}
                 <input
                   type="file"
                   accept="image/*,.pdf"
@@ -459,19 +459,19 @@ const ReservationsPage: React.FC = () => {
                 <Typography variant="body2" sx={{ mb: 1 }}>
                   Último recibo de sueldo:
                 </Typography>
-                {g.payslipFilePath && (
-                  <Typography variant="body2" sx={{ mb: 1 }}>
-                    📎{" "}
-                    <Link
-                      href={`${API_URL.replace("/api", "")}${g.payslipFilePath}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      color="#00BFA5"
-                    >
-                      Ver archivo existente
-                    </Link>
-                  </Typography>
-                )}
+{g.payslipFilePath && (
+  <Typography variant="body2" sx={{ mb: 1 }}>
+    📎{" "}
+    <a
+      href={g.payslipFilePath}
+      target="_blank"
+      rel="noopener noreferrer"
+      style={{ color: "#00BFA5", textDecoration: "none" }}
+    >
+      Ver archivo existente
+    </a>
+  </Typography>
+)}
                 <input
                   type="file"
                   accept="image/*,.pdf"
