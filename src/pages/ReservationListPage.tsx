@@ -95,6 +95,26 @@ const ReservationListPage: React.FC = () => {
 
   const isVigente = (status: string) => status === "Vigente";
 
+  const getAttachmentUrl = (filePath?: string) => {
+    if (!filePath) return "";
+
+    const trimmed = filePath.trim();
+
+    // Cloudinary / URLs absolutas
+    if (/^https?:\/\//i.test(trimmed)) {
+      return trimmed;
+    }
+
+    // Otros esquemas que puedan venir ya resueltos
+    if (/^(blob:|data:)/i.test(trimmed)) {
+      return trimmed;
+    }
+
+    // Compatibilidad con rutas locales viejas
+    const baseUrl = API_URL.replace(/\/api\/?$/, "");
+    return trimmed.startsWith("/") ? `${baseUrl}${trimmed}` : `${baseUrl}/${trimmed}`;
+  };
+
   const fetchReservations = async () => {
     setLoading(true);
     try {
@@ -139,8 +159,10 @@ const ReservationListPage: React.FC = () => {
       link.click();
       link.remove();
 
-      window.open(url, "_blank");
-      window.URL.revokeObjectURL(url);
+      // Damos un pequeño margen antes de liberar la URL temporal
+      setTimeout(() => {
+        window.URL.revokeObjectURL(url);
+      }, 1000);
     } catch (err) {
       console.error("❌ Error al descargar el PDF de la reserva:", err);
       setAlert({
@@ -152,7 +174,6 @@ const ReservationListPage: React.FC = () => {
     }
   };
 
-  // ✅ Confirmación antes de ejecutar
   const askConfirm = (id: number, nextStatus: "Aceptada" | "Cancelada") => {
     setConfirm({ open: true, reservationId: id, nextStatus });
   };
@@ -316,8 +337,8 @@ const ReservationListPage: React.FC = () => {
                           r.status === "Vigente"
                             ? "#00e676"
                             : r.status === "Vencida"
-                            ? "#ff5252"
-                            : "#ffb300",
+                              ? "#ff5252"
+                              : "#ffb300",
                       }}
                     >
                       {r.status}
@@ -343,7 +364,6 @@ const ReservationListPage: React.FC = () => {
                       </Tooltip>
                     </TableCell>
 
-                    {/* ✅ ACCIONES SOLO SI ESTÁ VIGENTE */}
                     <TableCell align="center">
                       {isVigente(r.status) ? (
                         <>
@@ -403,60 +423,64 @@ const ReservationListPage: React.FC = () => {
         </Button>
       </Box>
 
-      {/* Modal de Garantes */}
       <Dialog open={openGuarantors} onClose={handleCloseGuarantors} maxWidth="sm" fullWidth>
         <DialogTitle>Garantes de la Reserva #{selectedReservationId}</DialogTitle>
         <DialogContent>
           {selectedGuarantors.length === 0 ? (
             <Typography>No hay garantes cargados.</Typography>
           ) : (
-            selectedGuarantors.map((g, i) => (
-              <Box
-                key={i}
-                sx={{
-                  mb: 2,
-                  p: 2,
-                  background: "#2a2a3b",
-                  borderRadius: 2,
-                  color: "#fff",
-                }}
-              >
-                <Typography sx={{ color: "#00BFA5", fontWeight: 600 }}>
-                  {g.firstName} {g.lastName}
-                </Typography>
-                <Typography>DNI: {g.dni}</Typography>
-                {g.address && <Typography>Domicilio: {g.address}</Typography>}
-                {g.phone && <Typography>Teléfono: {g.phone}</Typography>}
+            selectedGuarantors.map((g, i) => {
+              const dniUrl = getAttachmentUrl(g.dniFilePath);
+              const payslipUrl = getAttachmentUrl(g.payslipFilePath);
 
-                {g.dniFilePath && (
-                  <Typography>
-                    📎{" "}
-                    <a
-                      href={`${API_URL.replace("/api", "")}${g.dniFilePath}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      style={{ color: "#00BFA5" }}
-                    >
-                      Ver DNI adjunto
-                    </a>
+              return (
+                <Box
+                  key={i}
+                  sx={{
+                    mb: 2,
+                    p: 2,
+                    background: "#2a2a3b",
+                    borderRadius: 2,
+                    color: "#fff",
+                  }}
+                >
+                  <Typography sx={{ color: "#00BFA5", fontWeight: 600 }}>
+                    {g.firstName} {g.lastName}
                   </Typography>
-                )}
+                  <Typography>DNI: {g.dni}</Typography>
+                  {g.address && <Typography>Domicilio: {g.address}</Typography>}
+                  {g.phone && <Typography>Teléfono: {g.phone}</Typography>}
 
-                {g.payslipFilePath && (
-                  <Typography>
-                    📎{" "}
-                    <a
-                      href={`${API_URL.replace("/api", "")}${g.payslipFilePath}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      style={{ color: "#00BFA5" }}
-                    >
-                      Ver Recibo de sueldo
-                    </a>
-                  </Typography>
-                )}
-              </Box>
-            ))
+                  {dniUrl && (
+                    <Typography>
+                      📎{" "}
+                      <a
+                        href={dniUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{ color: "#00BFA5" }}
+                      >
+                        Ver DNI adjunto
+                      </a>
+                    </Typography>
+                  )}
+
+                  {payslipUrl && (
+                    <Typography>
+                      📎{" "}
+                      <a
+                        href={payslipUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{ color: "#00BFA5" }}
+                      >
+                        Ver Recibo de sueldo
+                      </a>
+                    </Typography>
+                  )}
+                </Box>
+              );
+            })
           )}
         </DialogContent>
         <Box textAlign="center" p={2}>
@@ -466,7 +490,6 @@ const ReservationListPage: React.FC = () => {
         </Box>
       </Dialog>
 
-      {/* Confirmación Aceptar/Cancelar */}
       <Dialog open={confirm.open} onClose={closeConfirm}>
         <DialogTitle>Confirmar acción</DialogTitle>
         <DialogContent>
@@ -493,7 +516,6 @@ const ReservationListPage: React.FC = () => {
         </DialogActions>
       </Dialog>
 
-      {/* Snackbar */}
       <Snackbar
         open={alert.open}
         autoHideDuration={4000}

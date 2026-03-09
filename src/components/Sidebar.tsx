@@ -19,9 +19,11 @@ import SettingsIcon from "@mui/icons-material/Settings";
 import EventAvailableIcon from "@mui/icons-material/EventAvailable";
 import PersonIcon from "@mui/icons-material/Person";
 import PaidIcon from "@mui/icons-material/Paid"; // ✅ Devoluciones
+import CreditScoreIcon from "@mui/icons-material/CreditScore";
 import { useNavigate, useLocation } from "react-router-dom";
 import { permissions } from "../permissions";
 import { useAuth } from "../context/AuthContext";
+
 
 const drawerWidth = 240;
 
@@ -46,6 +48,7 @@ const Sidebar: React.FC<SidebarProps> = ({ mobileOpen = false, handleDrawerToggl
   const menuItems = [
     { text: "Vehículos", icon: <DirectionsCarIcon />, path: "/vehicles", key: "vehicles" },
     { text: "Clientes", icon: <PeopleIcon />, path: "/clients", key: "clients" },
+    { text: "Créditos Directo", icon: <CreditScoreIcon />, path: "/directo", key: "directo" },
     { text: "Generar Presupuesto", icon: <DescriptionIcon />, path: "/budgets", key: "budgets" },
     { text: "Listado de Presupuestos", icon: <DescriptionIcon />, path: "/budget-reports", key: "budget-reports" },
     { text: "Reservas", icon: <EventAvailableIcon />, path: "/reservations", key: "reservations" },

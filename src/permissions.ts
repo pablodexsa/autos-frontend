@@ -5,6 +5,7 @@
     "clients",
     "budgets",
     "budget-reports",
+    "directo",
     "reservations",
     "reservation-list",
     "refunds",

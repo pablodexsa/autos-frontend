@@ -18,24 +18,14 @@ import {
   Grid,
   MenuItem,
 } from "@mui/material";
-import { Add, AttachFile, Visibility } from "@mui/icons-material";
-import {
-  listInstallmentPayments,
-  createInstallmentPayment,
-} from "../api/installmentPayments";
+import { Visibility } from "@mui/icons-material";
+import { listInstallmentPayments } from "../api/installmentPayments";
 import "../styles/InstallmentPayments.css";
 import { API_URL } from "../config";
 import api from "../api/api";
 
 export default function InstallmentPayments() {
   const [payments, setPayments] = useState<any[]>([]);
-  const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({
-    installmentId: "",
-    amount: "",
-    paymentDate: "",
-    file: null as File | null,
-  });
 
   // Filtros
   const [filters, setFilters] = useState({
@@ -57,19 +47,6 @@ export default function InstallmentPayments() {
   useEffect(() => {
     fetchPayments();
   }, []);
-
-  const handleSubmit = async () => {
-    const formData = new FormData();
-    formData.append("installmentId", form.installmentId);
-    formData.append("amount", form.amount);
-    formData.append("paymentDate", form.paymentDate);
-    if (form.file) formData.append("file", form.file);
-
-    await createInstallmentPayment(formData);
-    setOpen(false);
-    setForm({ installmentId: "", amount: "", paymentDate: "", file: null });
-    fetchPayments();
-  };
 
   // 👉 Helper para formatear fecha sin corrimiento de día
   const formatDate = (value: any) => {
@@ -103,31 +80,20 @@ export default function InstallmentPayments() {
   };
 
   const getClientName = (p: any) => {
-    const c =
-      p.client ||
-      p.installment?.client ||
-      p.installment?.sale?.client ||
-      null;
+    const c = p.client || p.installment?.client || p.installment?.sale?.client || null;
     if (!c) return "—";
     const full = `${c.firstName ?? ""} ${c.lastName ?? ""}`.trim();
     return full || "—";
   };
 
   const getClientDni = (p: any) => {
-    const c =
-      p.client ||
-      p.installment?.client ||
-      p.installment?.sale?.client ||
-      null;
+    const c = p.client || p.installment?.client || p.installment?.sale?.client || null;
     return c?.dni ? String(c.dni) : "";
   };
 
-const getVehiclePlate = (p: any) => {
-  return (
-    p.installment?.sale?.vehicle?.plate ??
-    "—"
-  );
-};
+  const getVehiclePlate = (p: any) => {
+    return p.installment?.sale?.vehicle?.plate ?? "—";
+  };
 
   const getInstallmentLabel = (p: any) => {
     const inst = p.installment;
@@ -141,8 +107,7 @@ const getVehiclePlate = (p: any) => {
     if (inst?.sale?.installments?.length) {
       const ordered = [...inst.sale.installments].sort(
         (a: any, b: any) =>
-          new Date(a.dueDate).getTime() -
-          new Date(b.dueDate).getTime()
+          new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime()
       );
       const idx = ordered.findIndex((x: any) => x.id === inst.id);
       if (idx >= 0) {
@@ -170,8 +135,7 @@ const getVehiclePlate = (p: any) => {
     const name = getClientName(p).toLowerCase();
     const dni = getClientDni(p).toLowerCase();
 
-    const matchesClient =
-      !q || name.includes(q) || dni.includes(q);
+    const matchesClient = !q || name.includes(q) || dni.includes(q);
 
     // Fecha de pago en formato YYYY-MM-DD (para comparar con filtros)
     const payIso = p.paymentDate
@@ -189,8 +153,7 @@ const getVehiclePlate = (p: any) => {
     }
 
     const rec = p.installment?.receiver || "";
-    const matchesReceiver =
-      !filters.receiver || rec === filters.receiver;
+    const matchesReceiver = !filters.receiver || rec === filters.receiver;
 
     return matchesClient && matchesFrom && matchesTo && matchesReceiver;
   });
@@ -202,14 +165,6 @@ const getVehiclePlate = (p: any) => {
         <Typography variant="h5" sx={{ color: "#fff", fontWeight: 600 }}>
           Pagos de Cuotas
         </Typography>
-        <Button
-          startIcon={<Add />}
-          variant="contained"
-          color="primary"
-          onClick={() => setOpen(true)}
-        >
-          Registrar Pago
-        </Button>
       </Box>
 
       {/* Panel de filtros */}
@@ -323,7 +278,7 @@ const getVehiclePlate = (p: any) => {
 
                 <TableCell>{getInstallmentLabel(p)}</TableCell>
 
-                <TableCell>{getVehiclePlate(p)}</TableCell> {/* 👈 NUEVA */}
+                <TableCell>{getVehiclePlate(p)}</TableCell>
 
                 <TableCell>
                   $
@@ -347,9 +302,7 @@ const getVehiclePlate = (p: any) => {
                     <Button
                       size="small"
                       variant="outlined"
-                      onClick={() =>
-                        handleOpenObs(p.installment.observations)
-                      }
+                      onClick={() => handleOpenObs(p.installment.observations)}
                     >
                       Ver
                     </Button>
@@ -359,7 +312,6 @@ const getVehiclePlate = (p: any) => {
                 </TableCell>
 
                 <TableCell>
-                  {/* Comprobante del sistema */}
                   <IconButton
                     size="small"
                     onClick={() => handleOpenSystemReceipt(p.id)}
@@ -368,7 +320,6 @@ const getVehiclePlate = (p: any) => {
                     <Visibility />
                   </IconButton>
 
-                  {/* Archivo adjunto (si existe) */}
                   {p.receiptPath && (
                     <Button
                       size="small"
@@ -384,71 +335,6 @@ const getVehiclePlate = (p: any) => {
           </TableBody>
         </Table>
       </Paper>
-
-      {/* Modal para registrar pago */}
-      <Dialog open={open} onClose={() => setOpen(false)}>
-        <DialogTitle>Registrar Pago</DialogTitle>
-        <DialogContent>
-          <TextField
-            label="ID de Cuota"
-            fullWidth
-            margin="normal"
-            value={form.installmentId}
-            onChange={(e) =>
-              setForm({ ...form, installmentId: e.target.value })
-            }
-          />
-          <TextField
-            label="Monto"
-            type="number"
-            fullWidth
-            margin="normal"
-            value={form.amount}
-            onChange={(e) => setForm({ ...form, amount: e.target.value })}
-          />
-          <TextField
-            label="Fecha de Pago"
-            type="date"
-            fullWidth
-            margin="normal"
-            InputLabelProps={{ shrink: true }}
-            value={form.paymentDate}
-            onChange={(e) => setForm({ ...form, paymentDate: e.target.value })}
-          />
-
-          <Button
-            variant="outlined"
-            component="label"
-            startIcon={<AttachFile />}
-            fullWidth
-            sx={{ mt: 2 }}
-          >
-            Subir Comprobante
-            <input
-              type="file"
-              hidden
-              onChange={(e) =>
-                setForm({ ...form, file: e.target.files?.[0] || null })
-              }
-            />
-          </Button>
-
-          {form.file && (
-            <Typography variant="body2" sx={{ mt: 1 }}>
-              📎 {form.file.name}
-            </Typography>
-          )}
-        </DialogContent>
-
-        <DialogActions>
-          <Button onClick={() => setOpen(false)} color="inherit">
-            Cancelar
-          </Button>
-          <Button onClick={handleSubmit} variant="contained" color="success">
-            Guardar
-          </Button>
-        </DialogActions>
-      </Dialog>
 
       {/* Dialog de Observaciones */}
       <Dialog

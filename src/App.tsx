@@ -30,6 +30,7 @@ import AuditPage from "./pages/AuditPage";
 import SalesList from "./pages/SalesList";
 import SettingsPage from "./pages/settings";
 import Refunds from "./pages/Refunds";
+import DirectoLeads from "./pages/DirectoLeads";
 
 // Assets & global
 import theme from "./theme";
@@ -41,7 +42,6 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const location = useLocation();
   const isLoginPage = location.pathname === "/login";
 
-  // ✅ En /login no mostramos el layout
   if (isLoginPage) {
     return <>{children}</>;
   }
@@ -101,6 +101,15 @@ const App = () => {
 
                   <Route
                     path="/reservations"
+                    element={
+                      <ProtectedRoute permissionKey="reservations">
+                        <ReservationsPage />
+                      </ProtectedRoute>
+                    }
+                  />
+
+                  <Route
+                    path="/reservations/edit/:id"
                     element={
                       <ProtectedRoute permissionKey="reservations">
                         <ReservationsPage />
@@ -188,6 +197,15 @@ const App = () => {
                       </ProtectedRoute>
                     }
                   />
+
+<Route
+  path="/directo"
+  element={
+    <ProtectedRoute permissionKey="directo">
+      <DirectoLeads />
+    </ProtectedRoute>
+  }
+/>
 
                   <Route
                     path="/budget-reports"
