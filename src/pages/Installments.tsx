@@ -19,9 +19,8 @@ import {
   Grid,
   TablePagination,
 } from "@mui/material";
-import { AttachFile, Visibility, CheckCircle } from "@mui/icons-material";
+import { Visibility, CheckCircle } from "@mui/icons-material";
 import { listInstallments, registerInstallmentPayment } from "../api/installments";
-import { createInstallmentPayment } from "../api/installmentPayments";
 import api from "../api/api";
 import NotificationSnackbar from "../components/NotificationSnackbar";
 import { formatDateAR } from "../utils/date";
@@ -37,6 +36,7 @@ type StatusCode =
   | "PARTIAL_OVERDUE";
 
 type SnackbarSeverity = "success" | "error" | "warning" | "info";
+type PaymentReceiver = "AGENCY" | "STUDIO";
 
 const Installments: React.FC = () => {
   const [installments, setInstallments] = useState<any[]>([]);
@@ -47,7 +47,8 @@ const Installments: React.FC = () => {
 
   const [paymentAmount, setPaymentAmount] = useState<string>("");
   const [paymentDate, setPaymentDate] = useState<string>("");
-  const [receiptFile, setReceiptFile] = useState<File | null>(null);
+  const [paymentReceiver, setPaymentReceiver] = useState<PaymentReceiver>("AGENCY");
+  const [paymentObservations, setPaymentObservations] = useState<string>("");
 
   const [snackbarOpen, setSnackbarOpen] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState("");
@@ -55,7 +56,14 @@ const Installments: React.FC = () => {
 
   const [order, setOrder] = useState<Order>("asc");
   const [orderBy, setOrderBy] = useState<
-    "installmentLabel" | "client" | "vehiclePlate" | "amount" | "dueDate" | "status"
+    | "installmentLabel"
+    | "client"
+    | "vehiclePlate"
+    | "originalAmount"
+    | "remainingAmount"
+    | "paidAmount"
+    | "dueDate"
+    | "status"
   >("dueDate");
 
   const [page, setPage] = useState(0);
@@ -95,7 +103,8 @@ const Installments: React.FC = () => {
     setSelectedInstallmentId(installmentId);
     setPaymentAmount("");
     setPaymentDate("");
-    setReceiptFile(null);
+    setPaymentReceiver("AGENCY");
+    setPaymentObservations("");
     setOpenPaymentDialog(true);
   };
 
@@ -138,24 +147,12 @@ const Installments: React.FC = () => {
 
       setLoading(true);
 
-      const amount = Number(paymentAmount);
-
-      if (receiptFile) {
-        const formData = new FormData();
-        formData.append("installmentId", String(selectedInstallmentId));
-        formData.append("amount", String(amount));
-        formData.append("paymentDate", paymentDate);
-        formData.append("receiver", "AGENCY");
-        formData.append("receipt", receiptFile);
-
-        await createInstallmentPayment(formData);
-      } else {
-        await registerInstallmentPayment(selectedInstallmentId, {
-          amount,
-          paymentDate,
-          receiver: "AGENCY",
-        });
-      }
+      await registerInstallmentPayment(selectedInstallmentId, {
+        amount: Number(paymentAmount),
+        paymentDate,
+        receiver: paymentReceiver,
+        observations: paymentObservations.trim() || undefined,
+      });
 
       setSnackbarSeverity("success");
       setSnackbarMessage("Pago registrado correctamente");
@@ -185,6 +182,36 @@ const Installments: React.FC = () => {
 
   const getVehiclePlate = (i: any) => {
     return i.sale?.vehicle?.plate ?? i.vehicle?.plate ?? "—";
+  };
+
+  const getPaymentId = (i: any): number | null => {
+    if (i.payment?.id) return i.payment.id;
+    if (i.lastPayment?.id) return i.lastPayment.id;
+    if (i.installmentPayment?.id) return i.installmentPayment.id;
+    if (Array.isArray(i.payments) && i.payments.length > 0) {
+      const sorted = [...i.payments].sort((a, b) => Number(b.id) - Number(a.id));
+      return sorted[0]?.id ?? null;
+    }
+    return null;
+  };
+
+  const getOriginalAmount = (i: any) => Number(i.amount ?? 0);
+
+const getRemainingAmount = (i: any) => {
+  if (isOverdueRow(i) && !i.paid) {
+    return Number(i.currentAmount ?? i.remainingAmount ?? i.amount ?? 0);
+  }
+
+  return Number(i.remainingAmount ?? i.amount ?? 0);
+};
+
+  const getPaidAmount = (i: any) => {
+    const original = getOriginalAmount(i);
+    const remainingRaw = i.remainingAmount;
+    const remaining =
+      remainingRaw != null ? Number(remainingRaw) : original;
+
+    return Math.max(original - remaining, 0);
   };
 
   const isPartiallyPaid = (i: any) => {
@@ -266,9 +293,17 @@ const Installments: React.FC = () => {
         av = getVehiclePlate(a).toLowerCase();
         bv = getVehiclePlate(b).toLowerCase();
         break;
-      case "amount":
-        av = Number(a.currentAmount ?? a.amount ?? 0);
-        bv = Number(b.currentAmount ?? b.amount ?? 0);
+      case "originalAmount":
+        av = getOriginalAmount(a);
+        bv = getOriginalAmount(b);
+        break;
+      case "remainingAmount":
+        av = getRemainingAmount(a);
+        bv = getRemainingAmount(b);
+        break;
+      case "paidAmount":
+        av = getPaidAmount(a);
+        bv = getPaidAmount(b);
         break;
       case "dueDate":
         av = toISODate(a.dueDate);
@@ -400,8 +435,14 @@ const Installments: React.FC = () => {
               <TableCell onClick={() => handleRequestSort("vehiclePlate")} sx={{ cursor: "pointer" }}>
                 Vehículo
               </TableCell>
-              <TableCell onClick={() => handleRequestSort("amount")} sx={{ cursor: "pointer" }}>
-                Monto
+              <TableCell onClick={() => handleRequestSort("originalAmount")} sx={{ cursor: "pointer" }}>
+                Monto original
+              </TableCell>
+              <TableCell onClick={() => handleRequestSort("remainingAmount")} sx={{ cursor: "pointer" }}>
+                Saldo pendiente
+              </TableCell>
+              <TableCell onClick={() => handleRequestSort("paidAmount")} sx={{ cursor: "pointer" }}>
+                Pagado
               </TableCell>
               <TableCell onClick={() => handleRequestSort("dueDate")} sx={{ cursor: "pointer" }}>
                 Vencimiento
@@ -417,76 +458,80 @@ const Installments: React.FC = () => {
           <TableBody>
             {paginated.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8} sx={{ color: "#fff" }}>
+                <TableCell colSpan={10} sx={{ color: "#fff" }}>
                   {loading ? "Cargando..." : "No hay cuotas para mostrar"}
                 </TableCell>
               </TableRow>
             ) : (
-              paginated.map((i) => (
-                <TableRow
-                  key={i.id}
-                  sx={
-                    isOverdueRow(i)
-                      ? {
-                          "& td": {
-                            color: "error.main",
-                            fontWeight: 600,
-                          },
-                        }
-                      : undefined
-                  }
-                >
-                  <TableCell>{i.installmentLabel ?? "—"}</TableCell>
-                  <TableCell>
-                    {i.client ? `${i.client.firstName} ${i.client.lastName}` : "—"}
-                  </TableCell>
-                  <TableCell>{i.vehicle?.plate ?? "—"}</TableCell>
-                  <TableCell>${Number(i.currentAmount ?? i.amount ?? 0).toLocaleString()}</TableCell>
-                  <TableCell>{i.dueDate ? formatDateAR(i.dueDate) : "—"}</TableCell>
-                  <TableCell>{getStatusLabel(i)}</TableCell>
-                  <TableCell>
-                    {i.payment?.id ? (
-                      <IconButton
-                        color="primary"
-                        onClick={() => handleOpenReceipt(i.payment.id)}
-                        size="small"
-                      >
-                        <Visibility />
-                      </IconButton>
-                    ) : (
-                      "—"
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    {i.paid ? (
-                      <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                        <CheckCircle sx={{ color: "#2e7d32" }} />
-                        <Typography variant="body2" sx={{ color: "#2e7d32", fontWeight: 600 }}>
-                          Pagada
-                        </Typography>
-                      </Box>
-                    ) : isPartiallyPaid(i) ? (
-                      <Button
-                        size="small"
-                        variant="contained"
-                        color="warning"
-                        onClick={() => handleOpenPayment(i.id)}
-                      >
-                        Abonar saldo
-                      </Button>
-                    ) : (
-                      <Button
-                        size="small"
-                        variant="contained"
-                        color="success"
-                        onClick={() => handleOpenPayment(i.id)}
-                      >
-                        Pagar
-                      </Button>
-                    )}
-                  </TableCell>
-                </TableRow>
-              ))
+              paginated.map((i) => {
+                const paymentId = getPaymentId(i);
+
+                return (
+                  <TableRow
+                    key={i.id}
+                    sx={
+                      isOverdueRow(i)
+                        ? {
+                            "& td": {
+                              color: "error.main",
+                              fontWeight: 600,
+                            },
+                          }
+                        : undefined
+                    }
+                  >
+                    <TableCell>{i.installmentLabel ?? "—"}</TableCell>
+                    <TableCell>{i.client ? `${i.client.firstName} ${i.client.lastName}` : "—"}</TableCell>
+                    <TableCell>{i.vehicle?.plate ?? "—"}</TableCell>
+                    <TableCell>${getOriginalAmount(i).toLocaleString()}</TableCell>
+                    <TableCell>${getRemainingAmount(i).toLocaleString()}</TableCell>
+                    <TableCell>${getPaidAmount(i).toLocaleString()}</TableCell>
+                    <TableCell>{i.dueDate ? formatDateAR(i.dueDate) : "—"}</TableCell>
+                    <TableCell>{getStatusLabel(i)}</TableCell>
+                    <TableCell>
+                      {paymentId ? (
+                        <IconButton
+                          color="primary"
+                          onClick={() => handleOpenReceipt(paymentId)}
+                          size="small"
+                        >
+                          <Visibility />
+                        </IconButton>
+                      ) : (
+                        "—"
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {i.paid ? (
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                          <CheckCircle sx={{ color: "#2e7d32" }} />
+                          <Typography variant="body2" sx={{ color: "#2e7d32", fontWeight: 600 }}>
+                            Pagada
+                          </Typography>
+                        </Box>
+                      ) : isPartiallyPaid(i) ? (
+                        <Button
+                          size="small"
+                          variant="contained"
+                          color="warning"
+                          onClick={() => handleOpenPayment(i.id)}
+                        >
+                          Abonar saldo
+                        </Button>
+                      ) : (
+                        <Button
+                          size="small"
+                          variant="contained"
+                          color="success"
+                          onClick={() => handleOpenPayment(i.id)}
+                        >
+                          Pagar
+                        </Button>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                );
+              })
             )}
           </TableBody>
         </Table>
@@ -523,6 +568,7 @@ const Installments: React.FC = () => {
               onChange={(e) => setPaymentAmount(e.target.value)}
               fullWidth
             />
+
             <TextField
               label="Fecha de pago"
               type="date"
@@ -532,20 +578,25 @@ const Installments: React.FC = () => {
               fullWidth
             />
 
-            <Button
-              variant="outlined"
-              component="label"
-              startIcon={<AttachFile />}
-              sx={{ justifyContent: "flex-start" }}
+            <TextField
+              select
+              label="Quién recibe el dinero"
+              value={paymentReceiver}
+              onChange={(e) => setPaymentReceiver(e.target.value as PaymentReceiver)}
+              fullWidth
             >
-              {receiptFile ? receiptFile.name : "Adjuntar comprobante (opcional)"}
-              <input
-                hidden
-                type="file"
-                accept="image/*,application/pdf"
-                onChange={(e) => setReceiptFile(e.target.files?.[0] ?? null)}
-              />
-            </Button>
+              <MenuItem value="AGENCY">Agencia</MenuItem>
+              <MenuItem value="STUDIO">Estudio</MenuItem>
+            </TextField>
+
+            <TextField
+              label="Observaciones"
+              value={paymentObservations}
+              onChange={(e) => setPaymentObservations(e.target.value)}
+              fullWidth
+              multiline
+              minRows={2}
+            />
           </Box>
         </DialogContent>
         <DialogActions>
