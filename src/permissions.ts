@@ -54,12 +54,18 @@
     "sales",
   ],
 
+  preventa_motos: [
+    "home",
+    "directo",
+  ],
+
   gerencia: [
     "home",
     "vehicles",
     "clients",
     "budgets",
     "budget-reports",
+    "directo",
     "reservations",
     "reservation-list",
     "refunds",
