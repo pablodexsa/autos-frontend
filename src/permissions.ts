@@ -1,6 +1,7 @@
 ﻿export const permissions = {
   admin: [
     "home",
+    "dashboard_gerencial",
     "vehicles",
     "clients",
     "budgets",

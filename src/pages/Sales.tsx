@@ -269,7 +269,6 @@ const Sales: React.FC = () => {
 
     const price = Number(selectedVehicle.price) || 0;
     const tradeIn = form.hasTradeIn ? Number(form.tradeInValue) || 0 : 0;
-    const montoPrendarioNum = Number(form.montoPrendario) || 0;
     const montoFinanciacionNum = Number(form.montoFinanciacion) || 0;
 
     // saldo = precio - permuta
@@ -286,10 +285,7 @@ const Sales: React.FC = () => {
       newErrors.tradeIn =
         "El valor de la permuta no puede superar el precio del vehículo.";
     }
-    if (montoPrendarioNum > price * 0.5) {
-      newErrors.prendario =
-        "El préstamo prendario no puede superar el 50% del valor del vehículo.";
-    }
+
     if (montoFinanciacionNum > maxPersonalFinancing) {
       newErrors.financiacion = `El monto máximo de financiación personal es $${maxPersonalFinancing.toLocaleString(
         "es-AR"

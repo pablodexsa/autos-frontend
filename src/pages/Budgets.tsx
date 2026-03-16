@@ -81,22 +81,26 @@ const Budgets: React.FC = () => {
   };
 
   // 🚗 Vehículos disponibles
-  useEffect(() => {
-    api
-      .get("/vehicles", { params: { status: "available" } })
-      .then((res) => {
-        const dataRaw = res.data;
-        const data = Array.isArray(dataRaw)
-          ? dataRaw
-          : Array.isArray(dataRaw?.items)
-          ? dataRaw.items
-          : [];
-        setVehicles(data);
+useEffect(() => {
+  api
+    .get("/vehicles", { params: { status: "available", page: 1, limit: 1000 } })
+    .then((res) => {
+      const dataRaw = res.data;
+      const data = Array.isArray(dataRaw)
+        ? dataRaw
+        : Array.isArray(dataRaw?.items)
+        ? dataRaw.items
+        : [];
+      setVehicles(data);
+    })
+    .catch(() =>
+      setAlert({
+        open: true,
+        message: "No se pudieron cargar los vehículos disponibles.",
+        severity: "error",
       })
-      .catch(() =>
-        alert("No se pudieron cargar los vehículos disponibles.")
-      );
-  }, []);
+    );
+}, []);
 
   // Tasas de financiación
   useEffect(() => {
@@ -237,7 +241,6 @@ const Budgets: React.FC = () => {
 
     const price = Number(selectedVehicle.price) || 0;
     const tradeIn = form.hasTradeIn ? Number(form.tradeInValue) || 0 : 0;
-    const montoPrendarioNum = Number(form.montoPrendario) || 0;
     const montoFinanciacionNum = Number(form.montoFinanciacion) || 0;
 
     // saldo = precio - permuta
@@ -254,10 +257,7 @@ const Budgets: React.FC = () => {
       newErrors.tradeIn =
         "El valor de la permuta no puede superar el precio del vehículo.";
     }
-    if (montoPrendarioNum > price * 0.5) {
-      newErrors.prendario =
-        "El préstamo prendario no puede superar el 50% del valor del vehículo.";
-    }
+
     if (montoFinanciacionNum > maxPersonalFinancing) {
       newErrors.financiacion = `El monto máximo de financiación personal es $${maxPersonalFinancing.toLocaleString(
         "es-AR"

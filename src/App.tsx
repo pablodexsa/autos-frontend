@@ -31,6 +31,7 @@ import SalesList from "./pages/SalesList";
 import SettingsPage from "./pages/settings";
 import Refunds from "./pages/Refunds";
 import DirectoLeads from "./pages/DirectoLeads";
+import ManagerDashboard from "./pages/ManagerDashboard";
 
 // Assets & global
 import theme from "./theme";
@@ -203,6 +204,15 @@ const App = () => {
   element={
     <ProtectedRoute permissionKey="directo">
       <DirectoLeads />
+    </ProtectedRoute>
+  }
+/>
+
+<Route
+  path="/dashboard-gerencial"
+  element={
+    <ProtectedRoute permissionKey="dashboard_gerencial">
+      <ManagerDashboard />
     </ProtectedRoute>
   }
 />

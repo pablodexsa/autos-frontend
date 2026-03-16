@@ -20,6 +20,7 @@ import EventAvailableIcon from "@mui/icons-material/EventAvailable";
 import PersonIcon from "@mui/icons-material/Person";
 import PaidIcon from "@mui/icons-material/Paid"; // ✅ Devoluciones
 import CreditScoreIcon from "@mui/icons-material/CreditScore";
+import DashboardIcon from "@mui/icons-material/Dashboard";
 import { useNavigate, useLocation } from "react-router-dom";
 import { permissions } from "../permissions";
 import { useAuth } from "../context/AuthContext";
@@ -46,6 +47,7 @@ const Sidebar: React.FC<SidebarProps> = ({ mobileOpen = false, handleDrawerToggl
   const allowedKeys = permissions[role] || [];
 
   const menuItems = [
+    { text: "Dashboard Gerencial", icon: <DashboardIcon />, path: "/dashboard-gerencial", key: "dashboard_gerencial" },
     { text: "Vehículos", icon: <DirectionsCarIcon />, path: "/vehicles", key: "vehicles" },
     { text: "Clientes", icon: <PeopleIcon />, path: "/clients", key: "clients" },
     { text: "Créditos Directo", icon: <CreditScoreIcon />, path: "/directo", key: "directo" },
