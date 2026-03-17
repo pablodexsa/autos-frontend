@@ -23,10 +23,22 @@ type Vehicle = {
   versionName?: string;
   plate?: string;
   price: number;
+  isMotoPlan?: boolean;
 };
 
 type AlertSeverity = "success" | "info" | "warning" | "error";
 type AlertState = { open: boolean; message: string; severity: AlertSeverity };
+
+type MotoPlanOption = {
+  code: string;
+  name: string;
+  installments: number;
+  downPayment?: number;
+  totalInstallments?: number;
+  firstInstallmentsCount?: number;
+  firstInstallmentAmount?: number;
+  remainingInstallmentAmount?: number;
+};
 
 const Sales: React.FC = () => {
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
@@ -45,14 +57,11 @@ const Sales: React.FC = () => {
     financiacion: "",
   });
 
-  // Tasas de financiación desde backend
   const [loanRates, setLoanRates] = useState<Record<string, number>>({});
-
-  // Límite configurable de financiación personal (se trae desde /settings)
   const [maxPersonalFinancing, setMaxPersonalFinancing] =
     useState<number>(3500000);
+  const [motoPlans, setMotoPlans] = useState<MotoPlanOption[]>([]);
 
-  // Próximos 2 meses sugeridos para inicio de pagos
   const nextTwoMonths = useMemo(() => {
     const now = new Date();
     const m1 = new Date(now.getFullYear(), now.getMonth() + 1, 1);
@@ -63,39 +72,27 @@ const Sales: React.FC = () => {
   }, []);
 
   const [form, setForm] = useState({
-    // cliente
     dni: "",
     clientName: "",
-
-    // vehículo
     vehicleId: "",
     price: "",
-
-    // forma de pago y montos
-    // "contado" | "anticipo_financiacion"
     paymentType: "",
+    selectedMotoPlan: "",
     installments: "",
-
     hasTradeIn: false,
     tradeInValue: "",
     tradeInPlate: "",
     downPayment: "",
-
     montoPrendario: "",
     montoPersonal: "",
     montoFinanciacion: "",
-
-    // calculados
     balance: "",
     finalPrice: "",
     installmentValue: "",
-
-    // datos de cobro
     paymentDay: 5,
     initialPaymentMonth: "",
   });
 
-  // Helper: formato ARS
   const formatPesos = (valor: any) => {
     if (valor === "" || valor === null || valor === undefined) return "-";
     const n = Number(valor) || 0;
@@ -105,14 +102,13 @@ const Sales: React.FC = () => {
     })}`;
   };
 
-  // Cargar tasas desde /loan-rates
   useEffect(() => {
     api
       .get("/loan-rates")
       .then((res) => {
         const map: Record<string, number> = {};
         (res.data || []).forEach((r: any) => {
-          const key = `${r.type}_${r.months}`; // ej: "prendario_12"
+          const key = `${r.type}_${r.months}`;
           map[key] = Number(r.rate);
         });
         setLoanRates(map);
@@ -122,7 +118,6 @@ const Sales: React.FC = () => {
       });
   }, []);
 
-  // Cargar límite de financiación personal desde /settings
   useEffect(() => {
     api
       .get("/settings/financing/personal-max")
@@ -140,12 +135,24 @@ const Sales: React.FC = () => {
       });
   }, []);
 
-  // Mapea la cantidad real de cuotas al tramo de tasa (12, 24 o 36)
+  useEffect(() => {
+    api
+      .get("/settings/moto-plans")
+      .then((res) => {
+        const data = Array.isArray(res.data) ? res.data : [];
+        setMotoPlans(data);
+      })
+      .catch((err) => {
+        console.error("Error cargando planes de motos:", err);
+        setMotoPlans([]);
+      });
+  }, []);
+
   const mapMonthsToBracket = (months: number): number => {
     if (!months || months <= 0) return 0;
     if (months <= 12) return 12;
     if (months <= 24) return 24;
-    return 36; // 25 a 36
+    return 36;
   };
 
   const getRate = (
@@ -157,7 +164,6 @@ const Sales: React.FC = () => {
     return loanRates[`${type}_${bracket}`] ?? 0;
   };
 
-  // Cargar vehículos (disponibles + si el DNI tiene reserva aceptada)
   const loadVehicles = async (dni?: string) => {
     try {
       const res = await api.get(
@@ -173,14 +179,12 @@ const Sales: React.FC = () => {
     }
   };
 
-  // Inicializar: vehículos + mes inicial
   useEffect(() => {
     loadVehicles();
     setForm((prev) => ({ ...prev, initialPaymentMonth: nextTwoMonths[0] }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nextTwoMonths]);
 
-  // Buscar cliente por DNI y refrescar vehículos
   const handleDniChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const dniValue = e.target.value;
     setForm((prev) => ({ ...prev, dni: dniValue }));
@@ -209,18 +213,20 @@ const Sales: React.FC = () => {
     }
   };
 
-  // Selección de vehículo
   const handleVehicleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const vehicleId = e.target.value;
     const vehicle =
       vehicles.find((v) => String(v.id) === String(vehicleId)) || null;
     setSelectedVehicle(vehicle);
+
     if (vehicle) {
       const priceStr = String(Number(vehicle.price || 0).toFixed(2));
       setForm((prev) => ({
         ...prev,
         vehicleId,
         price: priceStr,
+        paymentType: "",
+        selectedMotoPlan: "",
         balance: priceStr,
         finalPrice: priceStr,
         downPayment: "",
@@ -230,12 +236,15 @@ const Sales: React.FC = () => {
         montoPersonal: "",
         montoFinanciacion: "",
         installments: "",
+        installmentValue: "",
       }));
     } else {
       setForm((prev) => ({
         ...prev,
         vehicleId,
         price: "",
+        paymentType: "",
+        selectedMotoPlan: "",
         balance: "",
         finalPrice: "",
         downPayment: "",
@@ -245,11 +254,11 @@ const Sales: React.FC = () => {
         montoPersonal: "",
         montoFinanciacion: "",
         installments: "",
+        installmentValue: "",
       }));
     }
   };
 
-  // Resetear permuta cuando se destilda
   useEffect(() => {
     if (!form.hasTradeIn) {
       setForm((prev) => ({
@@ -263,7 +272,6 @@ const Sales: React.FC = () => {
     }
   }, [form.hasTradeIn, selectedVehicle]);
 
-  // Reglas de negocio (validaciones + balance). Sin autocompletar montos.
   useEffect(() => {
     if (!selectedVehicle) return;
 
@@ -271,7 +279,6 @@ const Sales: React.FC = () => {
     const tradeIn = form.hasTradeIn ? Number(form.tradeInValue) || 0 : 0;
     const montoFinanciacionNum = Number(form.montoFinanciacion) || 0;
 
-    // saldo = precio - permuta
     const newBalance = Math.max(price - tradeIn, 0);
     const newBalanceStr = newBalance.toFixed(2);
     if (form.balance !== newBalanceStr) {
@@ -280,7 +287,6 @@ const Sales: React.FC = () => {
 
     const newErrors = { tradeIn: "", prendario: "", financiacion: "" };
 
-    // Validaciones
     if (form.hasTradeIn && tradeIn > price) {
       newErrors.tradeIn =
         "El valor de la permuta no puede superar el precio del vehículo.";
@@ -305,7 +311,6 @@ const Sales: React.FC = () => {
       }
     }
 
-    // Si la forma de pago es CONTADO, limpiamos préstamos, anticipo y cuotas
     if (form.paymentType === "contado") {
       if (
         form.downPayment ||
@@ -321,6 +326,7 @@ const Sales: React.FC = () => {
           montoPersonal: "",
           montoFinanciacion: "",
           installments: "",
+          installmentValue: "",
         }));
       }
       return;
@@ -338,9 +344,64 @@ const Sales: React.FC = () => {
     maxPersonalFinancing,
   ]);
 
-  // Calcular totales/valor cuota (base, sin tasas, para guardar)
+  useEffect(() => {
+    if (form.paymentType !== "plan_motos_0km") return;
+
+    if (!form.selectedMotoPlan) {
+      setForm((prev) => ({
+        ...prev,
+        downPayment: "",
+        installments: "",
+        installmentValue: "",
+        finalPrice: selectedVehicle
+          ? String(Number(selectedVehicle.price || 0).toFixed(2))
+          : "",
+      }));
+      return;
+    }
+
+    const selected = motoPlans.find((p) => p.code === form.selectedMotoPlan);
+    if (!selected) return;
+
+    const downPayment = Number(selected.downPayment ?? 0);
+    const totalInstallments = Number(
+      selected.totalInstallments ?? selected.installments ?? 0
+    );
+    const firstInstallmentsCount = Number(selected.firstInstallmentsCount ?? 0);
+    const firstInstallmentAmount = Number(selected.firstInstallmentAmount ?? 0);
+    const remainingInstallmentAmount = Number(
+      selected.remainingInstallmentAmount ?? 0
+    );
+
+    const remainingInstallments =
+      totalInstallments - firstInstallmentsCount;
+
+    const totalPlan =
+      downPayment +
+      firstInstallmentsCount * firstInstallmentAmount +
+      remainingInstallments * remainingInstallmentAmount;
+
+    const installmentValue =
+      firstInstallmentsCount === 0 ||
+      firstInstallmentAmount === remainingInstallmentAmount
+        ? String(Number(remainingInstallmentAmount).toFixed(2))
+        : "";
+
+    setForm((prev) => ({
+      ...prev,
+      downPayment: String(Number(downPayment).toFixed(2)),
+      installments: String(totalInstallments),
+      installmentValue,
+      finalPrice: String(Number(totalPlan).toFixed(2)),
+      montoPrendario: "",
+      montoPersonal: "",
+      montoFinanciacion: "",
+    }));
+  }, [form.paymentType, form.selectedMotoPlan, selectedVehicle, motoPlans]);
+
   useEffect(() => {
     if (!selectedVehicle) return;
+    if (form.paymentType === "plan_motos_0km") return;
 
     const price = Number(selectedVehicle.price) || 0;
     const tradeIn = form.hasTradeIn ? Number(form.tradeInValue) || 0 : 0;
@@ -394,10 +455,12 @@ const Sales: React.FC = () => {
 
   const hasErrors = Object.values(errors).some((msg) => !!msg);
 
+  const isMotoPlanVehicle = !!selectedVehicle?.isMotoPlan;
+  const isMotoPlanPayment = form.paymentType === "plan_motos_0km";
+
   const requiresInstallments = form.paymentType === "anticipo_financiacion";
   const missingInstallments = requiresInstallments && !form.installments;
 
-  // ---- Regla de composición del precio (solo para Anticipo + Financiación) ----
   const vehiclePrice =
     selectedVehicle && selectedVehicle.price
       ? Number(selectedVehicle.price) || 0
@@ -428,7 +491,6 @@ const Sales: React.FC = () => {
     !!someAmountEntered &&
     compositionDiff > 1;
 
-  // Cálculos SOLO para el preview con tasas desde la base
   const nCuotas = Number(form.installments) || 0;
   const netoPrendario = Number(form.montoPrendario) || 0;
   const netoPersonal = Number(form.montoPersonal) || 0;
@@ -453,19 +515,55 @@ const Sales: React.FC = () => {
       ? totalPrestamosConInteres / nCuotas
       : 0;
 
+  const selectedMotoPlanConfig = useMemo(() => {
+    if (!isMotoPlanPayment || !form.selectedMotoPlan) return null;
+
+    const selected = motoPlans.find((p) => p.code === form.selectedMotoPlan);
+    if (!selected) return null;
+
+    return {
+      code: selected.code,
+      name: selected.name,
+      downPayment: Number(selected.downPayment ?? 0),
+      totalInstallments: Number(
+        selected.totalInstallments ?? selected.installments ?? 0
+      ),
+      firstInstallmentsCount: Number(selected.firstInstallmentsCount ?? 0),
+      firstInstallmentAmount: Number(selected.firstInstallmentAmount ?? 0),
+      remainingInstallmentAmount: Number(
+        selected.remainingInstallmentAmount ?? 0
+      ),
+    };
+  }, [isMotoPlanPayment, form.selectedMotoPlan, motoPlans]);
+
+  const motoPlanRemainingInstallments = selectedMotoPlanConfig
+    ? selectedMotoPlanConfig.totalInstallments -
+      selectedMotoPlanConfig.firstInstallmentsCount
+    : 0;
+
+  const motoPlanTotal = selectedMotoPlanConfig
+    ? selectedMotoPlanConfig.downPayment +
+      selectedMotoPlanConfig.firstInstallmentsCount *
+        selectedMotoPlanConfig.firstInstallmentAmount +
+      motoPlanRemainingInstallments *
+        selectedMotoPlanConfig.remainingInstallmentAmount
+    : 0;
+
   const labelPayment = (p: string) => {
     switch (p) {
       case "contado":
         return "Contado";
       case "anticipo_financiacion":
         return "Anticipo + Financiación";
+      case "plan_motos_0km":
+        return "Plan Motos 0km";
       default:
         return "-";
     }
   };
 
   const handlePaymentTypeChange = (
-    value: "" | "contado" | "anticipo_financiacion"
+    value: "" | "contado" | "anticipo_financiacion" | "plan_motos_0km"
   ) => {
     setErrors({ tradeIn: "", prendario: "", financiacion: "" });
     setForm((prev) => ({
@@ -473,17 +571,34 @@ const Sales: React.FC = () => {
       paymentType: value,
       ...(value === "contado"
         ? {
+            selectedMotoPlan: "",
             downPayment: "",
             montoPrendario: "",
             montoPersonal: "",
             montoFinanciacion: "",
             installments: "",
+            installmentValue: "",
+          }
+        : {}),
+      ...(value === "anticipo_financiacion"
+        ? {
+            selectedMotoPlan: "",
+          }
+        : {}),
+      ...(value === "plan_motos_0km"
+        ? {
+            selectedMotoPlan: "",
+            downPayment: "",
+            montoPrendario: "",
+            montoPersonal: "",
+            montoFinanciacion: "",
+            installments: "",
+            installmentValue: "",
           }
         : {}),
     }));
   };
 
-  // Guardar venta y descargar PDF desde backend
   const handleSaveSale = async () => {
     if (!selectedVehicle) {
       setAlert({
@@ -512,7 +627,15 @@ const Sales: React.FC = () => {
       return;
     }
 
-    // Validación de composición del precio (solo Anticipo + Financiación)
+    if (form.paymentType === "plan_motos_0km" && !form.selectedMotoPlan) {
+      setAlert({
+        open: true,
+        message: "Debe seleccionar un plan.",
+        severity: "warning",
+      });
+      return;
+    }
+
     if (form.paymentType === "anticipo_financiacion") {
       const vehiclePriceLocal = Number(selectedVehicle.price) || 0;
       const totalCompositionLocal =
@@ -543,6 +666,8 @@ const Sales: React.FC = () => {
       clientName: form.clientName.trim(),
       vehicleId: Number(selectedVehicle.id),
       basePrice: Number(selectedVehicle.price),
+      paymentType: form.paymentType,
+      motoPlanCode: form.selectedMotoPlan || null,
       hasTradeIn: !!form.hasTradeIn,
       tradeInValue: Number(form.tradeInValue) || 0,
       tradeInPlate: form.tradeInPlate.trim() || null,
@@ -554,11 +679,9 @@ const Sales: React.FC = () => {
       balance: Number(form.balance) || 0,
       paymentDay: Number(form.paymentDay),
       initialPaymentMonth: form.initialPaymentMonth,
-      // provisoriamente usamos mismas cuotas para todos
       prendarioInstallments: Number(form.installments) || 0,
       personalInstallments: Number(form.installments) || 0,
       inHouseInstallments: Number(form.installments) || 0,
-      // tasas en 0 hasta que las expongamos en backend
       prendarioMonthlyRate: 0,
       personalMonthlyRate: 0,
       inHouseMonthlyRate: 0,
@@ -618,9 +741,7 @@ const Sales: React.FC = () => {
           boxShadow: "0px 4px 12px rgba(0,0,0,0.4)",
         }}
       >
-        {/* FORMULARIO (dos columnas) */}
         <Box display="grid" gridTemplateColumns="repeat(2, 1fr)" gap={2}>
-          {/* Cliente */}
           <TextField
             label="DNI del Cliente"
             value={form.dni}
@@ -636,7 +757,6 @@ const Sales: React.FC = () => {
             sx={{ input: { color: "#fff" }, label: { color: "#ccc" } }}
           />
 
-          {/* Vehículo */}
           <TextField
             select
             label="Vehículo"
@@ -661,7 +781,6 @@ const Sales: React.FC = () => {
             sx={{ input: { color: "#fff" }, label: { color: "#ccc" } }}
           />
 
-          {/* Permuta */}
           <FormControlLabel
             control={
               <Checkbox
@@ -714,14 +833,17 @@ const Sales: React.FC = () => {
             </>
           )}
 
-          {/* Forma de pago */}
           <TextField
             select
             label="Forma de Pago"
             value={form.paymentType}
             onChange={(e) =>
               handlePaymentTypeChange(
-                e.target.value as "" | "contado" | "anticipo_financiacion"
+                e.target.value as
+                  | ""
+                  | "contado"
+                  | "anticipo_financiacion"
+                  | "plan_motos_0km"
               )
             }
             fullWidth
@@ -731,9 +853,33 @@ const Sales: React.FC = () => {
             <MenuItem value="anticipo_financiacion">
               Anticipo + Financiación
             </MenuItem>
+            {isMotoPlanVehicle && (
+              <MenuItem value="plan_motos_0km">Plan Motos 0km</MenuItem>
+            )}
           </TextField>
 
-          {/* Anticipo */}
+          {isMotoPlanPayment && (
+            <TextField
+              select
+              label="Plan de Moto"
+              value={form.selectedMotoPlan}
+              onChange={(e) =>
+                setForm((prev) => ({
+                  ...prev,
+                  selectedMotoPlan: e.target.value,
+                }))
+              }
+              fullWidth
+              sx={{ input: { color: "#fff" }, label: { color: "#ccc" } }}
+            >
+              {motoPlans.map((p) => (
+                <MenuItem key={p.code} value={p.code}>
+                  {p.name} ({p.installments} cuotas)
+                </MenuItem>
+              ))}
+            </TextField>
+          )}
+
           {form.paymentType === "anticipo_financiacion" && (
             <TextField
               label="Anticipo"
@@ -747,7 +893,6 @@ const Sales: React.FC = () => {
             />
           )}
 
-          {/* Préstamo Prendario */}
           {form.paymentType === "anticipo_financiacion" && (
             <TextField
               label="Monto Préstamo Prendario (neto)"
@@ -766,7 +911,6 @@ const Sales: React.FC = () => {
             />
           )}
 
-          {/* Préstamo Personal */}
           {form.paymentType === "anticipo_financiacion" && (
             <TextField
               label="Monto Préstamo Personal (neto)"
@@ -783,7 +927,6 @@ const Sales: React.FC = () => {
             />
           )}
 
-          {/* Financiación Personal (in-house) */}
           {form.paymentType === "anticipo_financiacion" && (
             <TextField
               label="Monto Financiación Personal (neto)"
@@ -802,7 +945,6 @@ const Sales: React.FC = () => {
             />
           )}
 
-          {/* Cantidad de cuotas */}
           {form.paymentType === "anticipo_financiacion" && (
             <TextField
               select
@@ -828,8 +970,8 @@ const Sales: React.FC = () => {
             </TextField>
           )}
 
-          {/* Datos de cobro (solo si hay financiación) */}
-          {form.paymentType === "anticipo_financiacion" && (
+          {(form.paymentType === "anticipo_financiacion" ||
+            form.paymentType === "plan_motos_0km") && (
             <>
               <TextField
                 select
@@ -874,6 +1016,48 @@ const Sales: React.FC = () => {
           )}
         </Box>
 
+        {isMotoPlanPayment && selectedMotoPlanConfig && (
+          <Paper
+            sx={{
+              mt: 2,
+              p: 2,
+              backgroundColor: "#25253a",
+              border: "1px solid rgba(255,255,255,0.08)",
+            }}
+          >
+            <Typography variant="h6" sx={{ color: "#fff", mb: 1 }}>
+              Detalle del {selectedMotoPlanConfig.name}
+            </Typography>
+
+            <Typography sx={{ color: "#ddd" }}>
+              Anticipo: {formatPesos(selectedMotoPlanConfig.downPayment)}
+            </Typography>
+
+            {selectedMotoPlanConfig.firstInstallmentsCount > 0 ? (
+              <>
+                <Typography sx={{ color: "#ddd" }}>
+                  Primeras {selectedMotoPlanConfig.firstInstallmentsCount} cuotas:{" "}
+                  {formatPesos(selectedMotoPlanConfig.firstInstallmentAmount)}
+                </Typography>
+                <Typography sx={{ color: "#ddd" }}>
+                  Siguientes {motoPlanRemainingInstallments} cuotas:{" "}
+                  {formatPesos(selectedMotoPlanConfig.remainingInstallmentAmount)}
+                </Typography>
+              </>
+            ) : (
+              <Typography sx={{ color: "#ddd" }}>
+                {selectedMotoPlanConfig.totalInstallments} cuotas fijas de{" "}
+                {formatPesos(selectedMotoPlanConfig.remainingInstallmentAmount)}
+              </Typography>
+            )}
+
+            <Typography sx={{ color: "#ddd" }}>
+              Total de cuotas: {selectedMotoPlanConfig.totalInstallments}
+            </Typography>
+
+          </Paper>
+        )}
+
         {compositionMismatch && (
           <Box mt={2}>
             <Typography color="warning.main" variant="body2">
@@ -895,7 +1079,9 @@ const Sales: React.FC = () => {
               !form.vehicleId ||
               !form.paymentType ||
               hasErrors ||
-              missingInstallments ||
+              (form.paymentType === "anticipo_financiacion" &&
+                missingInstallments) ||
+              (isMotoPlanPayment && !form.selectedMotoPlan) ||
               compositionMismatch
             }
           >
@@ -904,7 +1090,6 @@ const Sales: React.FC = () => {
         </Box>
       </Paper>
 
-      {/* Diálogo de previsualización */}
       <Dialog
         open={previewOpen}
         onClose={() => setPreviewOpen(false)}
@@ -925,26 +1110,65 @@ const Sales: React.FC = () => {
           <Typography>
             Forma de pago: {labelPayment(form.paymentType)}
           </Typography>
+
+          {isMotoPlanPayment && form.selectedMotoPlan && (
+            <Typography>Plan: {form.selectedMotoPlan}</Typography>
+          )}
+
+          {isMotoPlanPayment && selectedMotoPlanConfig && (
+            <Box sx={{ mt: 2 }}>
+              <Typography variant="h6" sx={{ color: "#009879", mb: 1 }}>
+                Detalle del plan
+              </Typography>
+              <Typography>
+                Anticipo: {formatPesos(selectedMotoPlanConfig.downPayment)}
+              </Typography>
+
+              {selectedMotoPlanConfig.firstInstallmentsCount > 0 ? (
+                <>
+                  <Typography>
+                    Primeras {selectedMotoPlanConfig.firstInstallmentsCount} cuotas:{" "}
+                    {formatPesos(selectedMotoPlanConfig.firstInstallmentAmount)}
+                  </Typography>
+                  <Typography>
+                    Siguientes {motoPlanRemainingInstallments} cuotas:{" "}
+                    {formatPesos(selectedMotoPlanConfig.remainingInstallmentAmount)}
+                  </Typography>
+                </>
+              ) : (
+                <Typography>
+                  {selectedMotoPlanConfig.totalInstallments} cuotas fijas de{" "}
+                  {formatPesos(
+                    selectedMotoPlanConfig.remainingInstallmentAmount
+                  )}
+                </Typography>
+              )}
+
+              <Typography>
+                Total de cuotas: {selectedMotoPlanConfig.totalInstallments}
+              </Typography>
+            </Box>
+          )}
+
           {form.paymentType === "anticipo_financiacion" &&
             form.installments && (
               <Typography>Cuotas: {form.installments}</Typography>
             )}
+
           {form.paymentType === "anticipo_financiacion" &&
             form.downPayment && (
               <Typography>Anticipo: {formatPesos(form.downPayment)}</Typography>
             )}
+
           {form.hasTradeIn && form.tradeInValue && (
             <>
-              <Typography>
-                Permuta: {formatPesos(form.tradeInValue)}
-              </Typography>
+              <Typography>Permuta: {formatPesos(form.tradeInValue)}</Typography>
               {form.tradeInPlate && (
                 <Typography>Patente Permuta: {form.tradeInPlate}</Typography>
               )}
             </>
           )}
 
-          {/* Valor de cuota total con financiación real */}
           {form.paymentType === "anticipo_financiacion" &&
             valorCuotaTotalConInteres > 0 && (
               <Typography>
@@ -953,23 +1177,16 @@ const Sales: React.FC = () => {
               </Typography>
             )}
 
-          {/* Detalle de préstamos y financiaciones */}
           {form.paymentType === "anticipo_financiacion" &&
             (netoPrendario || netoPersonal || netoFinanciacion) && (
               <Box sx={{ mt: 2 }}>
-                <Typography
-                  variant="h6"
-                  sx={{ color: "#009879", mb: 1 }}
-                >
+                <Typography variant="h6" sx={{ color: "#009879", mb: 1 }}>
                   Detalle de Préstamos y Financiaciones
                 </Typography>
 
                 {netoPrendario > 0 && (
                   <Paper sx={{ p: 2, mb: 1, backgroundColor: "#f9f9f9" }}>
-                    <Typography
-                      variant="subtitle1"
-                      sx={{ color: "#009879" }}
-                    >
+                    <Typography variant="subtitle1" sx={{ color: "#009879" }}>
                       Préstamo Prendario
                     </Typography>
                     <Typography sx={{ color: "#000" }}>
@@ -992,10 +1209,7 @@ const Sales: React.FC = () => {
 
                 {netoPersonal > 0 && (
                   <Paper sx={{ p: 2, mb: 1, backgroundColor: "#f9f9f9" }}>
-                    <Typography
-                      variant="subtitle1"
-                      sx={{ color: "#009879" }}
-                    >
+                    <Typography variant="subtitle1" sx={{ color: "#009879" }}>
                       Préstamo Personal
                     </Typography>
                     <Typography sx={{ color: "#000" }}>
@@ -1018,10 +1232,7 @@ const Sales: React.FC = () => {
 
                 {netoFinanciacion > 0 && (
                   <Paper sx={{ p: 2, mb: 1, backgroundColor: "#f9f9f9" }}>
-                    <Typography
-                      variant="subtitle1"
-                      sx={{ color: "#009879" }}
-                    >
+                    <Typography variant="subtitle1" sx={{ color: "#009879" }}>
                       Financiación Personal
                     </Typography>
                     <Typography sx={{ color: "#000" }}>
@@ -1056,6 +1267,7 @@ const Sales: React.FC = () => {
                 !form.paymentType ||
                 (form.paymentType === "anticipo_financiacion" &&
                   missingInstallments) ||
+                (isMotoPlanPayment && !form.selectedMotoPlan) ||
                 compositionMismatch
               }
             >
@@ -1072,7 +1284,6 @@ const Sales: React.FC = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Snackbar */}
       <Snackbar
         open={alert.open}
         autoHideDuration={4500}

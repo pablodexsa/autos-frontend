@@ -441,6 +441,7 @@ export default function VehiclesPage() {
 
     const payload = {
       category: formCategory,
+      isMotoPlan: fd.get("isMotoPlan") === "on",
       versionId,
       year: Number(fd.get("year") as string),
 
@@ -813,6 +814,18 @@ export default function VehiclesPage() {
                   <option value="MOTORCYCLE">Moto</option>
                 )}
               </select>
+
+{/* Moto Plan 0km */}
+{formCategory === "MOTORCYCLE" && (
+  <label style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+    <input
+      type="checkbox"
+      name="isMotoPlan"
+      defaultChecked={(editing as any)?.isMotoPlan || false}
+    />
+    Moto Plan 0km
+  </label>
+)}
 
               {/* Selects dependientes */}
               <div style={{ display: "flex", gap: "6px" }}>

@@ -20,7 +20,10 @@ import {
   TablePagination,
 } from "@mui/material";
 import { Visibility, CheckCircle } from "@mui/icons-material";
-import { listInstallments, registerInstallmentPayment } from "../api/installments";
+import {
+  listInstallments,
+  registerInstallmentPayment,
+} from "../api/installments";
 import api from "../api/api";
 import NotificationSnackbar from "../components/NotificationSnackbar";
 import { formatDateAR } from "../utils/date";
@@ -43,22 +46,27 @@ const Installments: React.FC = () => {
   const [loading, setLoading] = useState(false);
 
   const [openPaymentDialog, setOpenPaymentDialog] = useState(false);
-  const [selectedInstallmentId, setSelectedInstallmentId] = useState<number | null>(null);
+  const [selectedInstallmentId, setSelectedInstallmentId] = useState<number | null>(
+    null
+  );
 
   const [paymentAmount, setPaymentAmount] = useState<string>("");
   const [paymentDate, setPaymentDate] = useState<string>("");
-  const [paymentReceiver, setPaymentReceiver] = useState<PaymentReceiver>("AGENCY");
+  const [paymentReceiver, setPaymentReceiver] =
+    useState<PaymentReceiver>("AGENCY");
   const [paymentObservations, setPaymentObservations] = useState<string>("");
 
   const [snackbarOpen, setSnackbarOpen] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState("");
-  const [snackbarSeverity, setSnackbarSeverity] = useState<SnackbarSeverity>("success");
+  const [snackbarSeverity, setSnackbarSeverity] =
+    useState<SnackbarSeverity>("success");
 
   const [order, setOrder] = useState<Order>("asc");
   const [orderBy, setOrderBy] = useState<
     | "installmentLabel"
     | "client"
     | "vehiclePlate"
+    | "concept"
     | "originalAmount"
     | "remainingAmount"
     | "paidAmount"
@@ -197,19 +205,18 @@ const Installments: React.FC = () => {
 
   const getOriginalAmount = (i: any) => Number(i.amount ?? 0);
 
-const getRemainingAmount = (i: any) => {
-  if (isOverdueRow(i) && !i.paid) {
-    return Number(i.currentAmount ?? i.remainingAmount ?? i.amount ?? 0);
-  }
+  const getRemainingAmount = (i: any) => {
+    if (isOverdueRow(i) && !i.paid) {
+      return Number(i.currentAmount ?? i.remainingAmount ?? i.amount ?? 0);
+    }
 
-  return Number(i.remainingAmount ?? i.amount ?? 0);
-};
+    return Number(i.remainingAmount ?? i.amount ?? 0);
+  };
 
   const getPaidAmount = (i: any) => {
     const original = getOriginalAmount(i);
     const remainingRaw = i.remainingAmount;
-    const remaining =
-      remainingRaw != null ? Number(remainingRaw) : original;
+    const remaining = remainingRaw != null ? Number(remainingRaw) : original;
 
     return Math.max(original - remaining, 0);
   };
@@ -218,6 +225,17 @@ const getRemainingAmount = (i: any) => {
     if (i.paid) return false;
     if (i.remainingAmount == null) return false;
     return Number(i.remainingAmount) < Number(i.amount);
+  };
+
+  const labelInstallmentConcept = (concept?: string | null) => {
+    switch (concept) {
+      case "PERSONAL_FINANCING":
+        return "Financiación Personal";
+      case "MOTO_PLAN":
+        return "Plan Motos";
+      default:
+        return concept || "-";
+    }
   };
 
   const pad2 = (n: number) => String(n).padStart(2, "0");
@@ -229,7 +247,9 @@ const getRemainingAmount = (i: any) => {
       return s.includes("T") ? s.slice(0, 10) : s.slice(0, 10);
     }
     if (value instanceof Date) {
-      return `${value.getFullYear()}-${pad2(value.getMonth() + 1)}-${pad2(value.getDate())}`;
+      return `${value.getFullYear()}-${pad2(value.getMonth() + 1)}-${pad2(
+        value.getDate()
+      )}`;
     }
     const s = String(value);
     return s.includes("T") ? s.slice(0, 10) : s.slice(0, 10);
@@ -293,6 +313,10 @@ const getRemainingAmount = (i: any) => {
         av = getVehiclePlate(a).toLowerCase();
         bv = getVehiclePlate(b).toLowerCase();
         break;
+      case "concept":
+        av = labelInstallmentConcept(a.concept).toLowerCase();
+        bv = labelInstallmentConcept(b.concept).toLowerCase();
+        break;
       case "originalAmount":
         av = getOriginalAmount(a);
         bv = getOriginalAmount(b);
@@ -354,7 +378,10 @@ const getRemainingAmount = (i: any) => {
   const start = page * rowsPerPage + 1;
   const end = Math.min(start + rowsPerPage - 1, filteredSorted.length);
 
-  const paginated = filteredSorted.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
+  const paginated = filteredSorted.slice(
+    page * rowsPerPage,
+    page * rowsPerPage + rowsPerPage
+  );
 
   return (
     <Box className="installments-container">
@@ -426,28 +453,58 @@ const getRemainingAmount = (i: any) => {
         <Table>
           <TableHead>
             <TableRow>
-              <TableCell onClick={() => handleRequestSort("installmentLabel")} sx={{ cursor: "pointer" }}>
+              <TableCell
+                onClick={() => handleRequestSort("installmentLabel")}
+                sx={{ cursor: "pointer" }}
+              >
                 Cuota
               </TableCell>
-              <TableCell onClick={() => handleRequestSort("client")} sx={{ cursor: "pointer" }}>
+              <TableCell
+                onClick={() => handleRequestSort("client")}
+                sx={{ cursor: "pointer" }}
+              >
                 Cliente
               </TableCell>
-              <TableCell onClick={() => handleRequestSort("vehiclePlate")} sx={{ cursor: "pointer" }}>
+              <TableCell
+                onClick={() => handleRequestSort("vehiclePlate")}
+                sx={{ cursor: "pointer" }}
+              >
                 Vehículo
               </TableCell>
-              <TableCell onClick={() => handleRequestSort("originalAmount")} sx={{ cursor: "pointer" }}>
+              <TableCell
+                onClick={() => handleRequestSort("concept")}
+                sx={{ cursor: "pointer" }}
+              >
+                Concepto
+              </TableCell>
+              <TableCell
+                onClick={() => handleRequestSort("originalAmount")}
+                sx={{ cursor: "pointer" }}
+              >
                 Monto original
               </TableCell>
-              <TableCell onClick={() => handleRequestSort("remainingAmount")} sx={{ cursor: "pointer" }}>
+              <TableCell
+                onClick={() => handleRequestSort("remainingAmount")}
+                sx={{ cursor: "pointer" }}
+              >
                 Saldo pendiente
               </TableCell>
-              <TableCell onClick={() => handleRequestSort("paidAmount")} sx={{ cursor: "pointer" }}>
+              <TableCell
+                onClick={() => handleRequestSort("paidAmount")}
+                sx={{ cursor: "pointer" }}
+              >
                 Pagado
               </TableCell>
-              <TableCell onClick={() => handleRequestSort("dueDate")} sx={{ cursor: "pointer" }}>
+              <TableCell
+                onClick={() => handleRequestSort("dueDate")}
+                sx={{ cursor: "pointer" }}
+              >
                 Vencimiento
               </TableCell>
-              <TableCell onClick={() => handleRequestSort("status")} sx={{ cursor: "pointer" }}>
+              <TableCell
+                onClick={() => handleRequestSort("status")}
+                sx={{ cursor: "pointer" }}
+              >
                 Estado
               </TableCell>
               <TableCell>Comprobante</TableCell>
@@ -458,7 +515,7 @@ const getRemainingAmount = (i: any) => {
           <TableBody>
             {paginated.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={10} sx={{ color: "#fff" }}>
+                <TableCell colSpan={11} sx={{ color: "#fff" }}>
                   {loading ? "Cargando..." : "No hay cuotas para mostrar"}
                 </TableCell>
               </TableRow>
@@ -481,8 +538,11 @@ const getRemainingAmount = (i: any) => {
                     }
                   >
                     <TableCell>{i.installmentLabel ?? "—"}</TableCell>
-                    <TableCell>{i.client ? `${i.client.firstName} ${i.client.lastName}` : "—"}</TableCell>
+                    <TableCell>
+                      {i.client ? `${i.client.firstName} ${i.client.lastName}` : "—"}
+                    </TableCell>
                     <TableCell>{i.vehicle?.plate ?? "—"}</TableCell>
+                    <TableCell>{labelInstallmentConcept(i.concept)}</TableCell>
                     <TableCell>${getOriginalAmount(i).toLocaleString()}</TableCell>
                     <TableCell>${getRemainingAmount(i).toLocaleString()}</TableCell>
                     <TableCell>${getPaidAmount(i).toLocaleString()}</TableCell>
@@ -505,7 +565,10 @@ const getRemainingAmount = (i: any) => {
                       {i.paid ? (
                         <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                           <CheckCircle sx={{ color: "#2e7d32" }} />
-                          <Typography variant="body2" sx={{ color: "#2e7d32", fontWeight: 600 }}>
+                          <Typography
+                            variant="body2"
+                            sx={{ color: "#2e7d32", fontWeight: 600 }}
+                          >
                             Pagada
                           </Typography>
                         </Box>
@@ -536,10 +599,17 @@ const getRemainingAmount = (i: any) => {
           </TableBody>
         </Table>
 
-        <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", px: 2 }}>
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            px: 2,
+          }}
+        >
           <Typography variant="body2" sx={{ color: "#fff", py: 1 }}>
-            Mostrando {filteredSorted.length === 0 ? 0 : start}–{filteredSorted.length === 0 ? 0 : end} de{" "}
-            {filteredSorted.length}
+            Mostrando {filteredSorted.length === 0 ? 0 : start}–
+            {filteredSorted.length === 0 ? 0 : end} de {filteredSorted.length}
           </Typography>
 
           <TablePagination
@@ -557,7 +627,12 @@ const getRemainingAmount = (i: any) => {
         </Box>
       </Paper>
 
-      <Dialog open={openPaymentDialog} onClose={handleClosePayment} maxWidth="sm" fullWidth>
+      <Dialog
+        open={openPaymentDialog}
+        onClose={handleClosePayment}
+        maxWidth="sm"
+        fullWidth
+      >
         <DialogTitle>Registrar pago</DialogTitle>
         <DialogContent>
           <Box sx={{ display: "flex", flexDirection: "column", gap: 2, mt: 1 }}>
@@ -582,7 +657,9 @@ const getRemainingAmount = (i: any) => {
               select
               label="Quién recibe el dinero"
               value={paymentReceiver}
-              onChange={(e) => setPaymentReceiver(e.target.value as PaymentReceiver)}
+              onChange={(e) =>
+                setPaymentReceiver(e.target.value as PaymentReceiver)
+              }
               fullWidth
             >
               <MenuItem value="AGENCY">Agencia</MenuItem>

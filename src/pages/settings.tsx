@@ -3,6 +3,7 @@ import SettingsLoanRates from "./Settings/SettingsLoanRates";
 import SettingsMaxPersonalFinancing from "./Settings/SettingsMaxPersonalFinancing";
 import SettingsReservationAmount from "./Settings/SettingsReservationAmount";
 import SettingsReservationRefundAmount from "./Settings/SettingsReservationRefundAmount";
+import SettingsMotoPlans from "./Settings/SettingsMotoPlans";
 
 export default function SettingsPage() {
   return (
@@ -27,6 +28,11 @@ export default function SettingsPage() {
         <Paper sx={{ p: 2 }}>
           <SettingsReservationRefundAmount />
         </Paper>
+
+        <Paper sx={{ p: 2 }}>
+          <SettingsMotoPlans />
+        </Paper>
+
       </Stack>
     </Box>
   );
