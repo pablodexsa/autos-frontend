@@ -104,7 +104,11 @@ const ReservationsPage: React.FC = () => {
 
   const fetchVehicles = async () => {
     try {
-      const endpoint = id ? "/vehicles" : "/vehicles?status=available";
+
+const endpoint = id
+  ? "/vehicles?limit=1000"
+  : "/vehicles?status=available&limit=1000";
+
       const res = await api.get(endpoint);
       const data = Array.isArray(res.data?.items) ? res.data.items : Array.isArray(res.data) ? res.data : [];
 

@@ -1,5 +1,6 @@
 ﻿import React from "react";
 import { Navigate, useLocation } from "react-router-dom";
+import { Box, CircularProgress } from "@mui/material";
 import { useAuth } from "../context/AuthContext";
 import { permissions } from "../permissions";
 
@@ -14,8 +15,25 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   roles,
   permissionKey,
 }) => {
-  const { user } = useAuth();
+  const { user, ready } = useAuth();
   const location = useLocation();
+
+  // ✅ Esperar a que AuthContext termine de hidratar localStorage
+  if (!ready) {
+    return (
+      <Box
+        sx={{
+          minHeight: "100vh",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          background: "linear-gradient(135deg, #0f0f1b 0%, #1b1b2f 100%)",
+        }}
+      >
+        <CircularProgress />
+      </Box>
+    );
+  }
 
   // ✅ No logueado → login
   if (!user) {
