@@ -369,7 +369,7 @@ const CuotaRedLeads: React.FC = () => {
             Créditos Cuota Red
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Consulta de elegibilidad por DNI y género para financiación de motos.
+            Consulta por DNI y género para financiación de motos.
           </Typography>
         </Box>
 

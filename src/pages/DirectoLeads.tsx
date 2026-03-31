@@ -366,7 +366,7 @@ const DirectoLeads: React.FC = () => {
             Créditos Directo
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Consulta de elegibilidad por DNI y género para préstamos personales de moto.
+            Consulta por DNI y género para préstamos personales de moto.
           </Typography>
         </Box>
 
