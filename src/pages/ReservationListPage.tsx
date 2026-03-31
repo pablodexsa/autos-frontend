@@ -29,6 +29,7 @@ import { useNavigate } from "react-router-dom";
 import api from "../api/api";
 import { API_URL } from "../config";
 import { useAuth } from "../context/AuthContext";
+import LoadingActionButton from "../components/LoadingActionButton";
 
 interface Guarantor {
   firstName: string;
@@ -68,6 +69,7 @@ type ConfirmAction = {
 const ReservationListPage: React.FC = () => {
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [loading, setLoading] = useState(false);
+  const [processingReservation, setProcessingReservation] = useState(false);
 
   const [openGuarantors, setOpenGuarantors] = useState(false);
   const [selectedGuarantors, setSelectedGuarantors] = useState<Guarantor[]>([]);
@@ -182,36 +184,42 @@ const ReservationListPage: React.FC = () => {
     setConfirm({ open: false, reservationId: null, nextStatus: null });
   };
 
-  const handleUpdateStatus = async (id: number, status: "Aceptada" | "Cancelada") => {
-    try {
-      await api.patch(`/reservations/${id}`, { status });
-      await fetchReservations();
+const handleUpdateStatus = async (id: number, status: "Aceptada" | "Cancelada") => {
+  if (processingReservation) return;
 
-      if (status === "Cancelada") {
-        setAlert({
-          open: true,
-          msg: "Reserva cancelada. Se generó una devolución pendiente.",
-          type: "success",
-          showRefundsAction: true,
-        });
-      } else {
-        setAlert({
-          open: true,
-          msg: "Reserva aceptada correctamente.",
-          type: "success",
-          showRefundsAction: false,
-        });
-      }
-    } catch (e: any) {
-      console.error("Error al actualizar estado:", e);
+  try {
+    setProcessingReservation(true);
+
+    await api.patch(`/reservations/${id}`, { status });
+    await fetchReservations();
+
+    if (status === "Cancelada") {
       setAlert({
         open: true,
-        msg: e?.response?.data?.message || "Error al actualizar estado de reserva.",
-        type: "error",
+        msg: "Reserva cancelada. Se generó una devolución pendiente.",
+        type: "success",
+        showRefundsAction: true,
+      });
+    } else {
+      setAlert({
+        open: true,
+        msg: "Reserva aceptada correctamente.",
+        type: "success",
         showRefundsAction: false,
       });
     }
-  };
+  } catch (e: any) {
+    console.error("Error al actualizar estado:", e);
+    setAlert({
+      open: true,
+      msg: e?.response?.data?.message || "Error al actualizar estado de reserva.",
+      type: "error",
+      showRefundsAction: false,
+    });
+  } finally {
+    setProcessingReservation(false);
+  }
+};
 
   const handleEdit = (id: number) => {
     navigate(`/reservations/edit/${id}`);
@@ -377,7 +385,10 @@ const ReservationListPage: React.FC = () => {
 
                           {canCancel && (
                             <Tooltip title="Cancelar Reserva">
-                              <IconButton onClick={() => askConfirm(r.id, "Cancelada")}>
+                              <IconButton
+                                onClick={() => askConfirm(r.id, "Cancelada")}
+                                disabled={processingReservation}
+                              >
                                 <CancelIcon sx={{ color: "#e53935" }} />
                               </IconButton>
                             </Tooltip>
@@ -496,23 +507,30 @@ const ReservationListPage: React.FC = () => {
           <Typography>{confirmText}</Typography>
         </DialogContent>
         <DialogActions>
-          <Button onClick={closeConfirm} variant="outlined">
-            No
-          </Button>
-          <Button
-            onClick={async () => {
-              if (confirm.reservationId && confirm.nextStatus) {
-                const id = confirm.reservationId;
-                const st = confirm.nextStatus;
-                closeConfirm();
-                await handleUpdateStatus(id, st);
-              }
-            }}
-            variant="contained"
-            color={confirm.nextStatus === "Cancelada" ? "error" : "success"}
-          >
-            Sí, confirmar
-          </Button>
+<Button onClick={closeConfirm} variant="outlined" disabled={processingReservation}>
+  No
+</Button>
+<LoadingActionButton
+  onClick={async () => {
+    if (confirm.reservationId && confirm.nextStatus) {
+      const id = confirm.reservationId;
+      const st = confirm.nextStatus;
+      await handleUpdateStatus(id, st);
+      closeConfirm();
+    }
+  }}
+  variant="contained"
+  color={confirm.nextStatus === "Cancelada" ? "error" : "success"}
+  loading={processingReservation}
+  loadingText={
+    confirm.nextStatus === "Cancelada"
+      ? "Cancelando..."
+      : "Aceptando..."
+  }
+>
+  Sí, confirmar
+</LoadingActionButton>
+
         </DialogActions>
       </Dialog>
 

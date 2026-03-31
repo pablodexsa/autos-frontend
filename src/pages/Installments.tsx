@@ -28,6 +28,7 @@ import api from "../api/api";
 import NotificationSnackbar from "../components/NotificationSnackbar";
 import { formatDateAR } from "../utils/date";
 import "../styles/Installments.css";
+import LoadingActionButton from "../components/LoadingActionButton";
 
 type Order = "asc" | "desc";
 
@@ -43,7 +44,8 @@ type PaymentReceiver = "AGENCY" | "STUDIO";
 
 const Installments: React.FC = () => {
   const [installments, setInstallments] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
+const [loading, setLoading] = useState(false);
+const [savingPayment, setSavingPayment] = useState(false);
 
   const [openPaymentDialog, setOpenPaymentDialog] = useState(false);
   const [selectedInstallmentId, setSelectedInstallmentId] = useState<number | null>(
@@ -135,52 +137,52 @@ const Installments: React.FC = () => {
     }
   };
 
-  const handlePaymentSubmit = async () => {
-    if (selectedInstallmentId == null) return;
+const handlePaymentSubmit = async () => {
+  if (selectedInstallmentId == null || savingPayment) return;
 
-    try {
-      if (!paymentAmount || Number(paymentAmount) <= 0) {
-        setSnackbarSeverity("warning");
-        setSnackbarMessage("Ingresá un monto válido");
-        setSnackbarOpen(true);
-        return;
-      }
-
-      if (!paymentDate) {
-        setSnackbarSeverity("warning");
-        setSnackbarMessage("Ingresá una fecha de pago");
-        setSnackbarOpen(true);
-        return;
-      }
-
-      setLoading(true);
-
-      await registerInstallmentPayment(selectedInstallmentId, {
-        amount: Number(paymentAmount),
-        paymentDate,
-        receiver: paymentReceiver,
-        observations: paymentObservations.trim() || undefined,
-      });
-
-      setSnackbarSeverity("success");
-      setSnackbarMessage("Pago registrado correctamente");
+  try {
+    if (!paymentAmount || Number(paymentAmount) <= 0) {
+      setSnackbarSeverity("warning");
+      setSnackbarMessage("Ingresá un monto válido");
       setSnackbarOpen(true);
-
-      await fetchInstallments();
-      handleClosePayment();
-    } catch (err: any) {
-      console.error("Error registrando pago:", err?.response?.data || err);
-      setSnackbarSeverity("error");
-      setSnackbarMessage(
-        err?.response?.data?.message ||
-          err?.response?.data?.mensaje ||
-          "Error registrando pago"
-      );
-      setSnackbarOpen(true);
-    } finally {
-      setLoading(false);
+      return;
     }
-  };
+
+    if (!paymentDate) {
+      setSnackbarSeverity("warning");
+      setSnackbarMessage("Ingresá una fecha de pago");
+      setSnackbarOpen(true);
+      return;
+    }
+
+    setSavingPayment(true);
+
+    await registerInstallmentPayment(selectedInstallmentId, {
+      amount: Number(paymentAmount),
+      paymentDate,
+      receiver: paymentReceiver,
+      observations: paymentObservations.trim() || undefined,
+    });
+
+    setSnackbarSeverity("success");
+    setSnackbarMessage("Pago registrado correctamente");
+    setSnackbarOpen(true);
+
+    await fetchInstallments();
+    handleClosePayment();
+  } catch (err: any) {
+    console.error("Error registrando pago:", err?.response?.data || err);
+    setSnackbarSeverity("error");
+    setSnackbarMessage(
+      err?.response?.data?.message ||
+        err?.response?.data?.mensaje ||
+        "Error registrando pago"
+    );
+    setSnackbarOpen(true);
+  } finally {
+    setSavingPayment(false);
+  }
+};
 
   const getClientName = (i: any) => {
     const c = i.client ?? i.sale?.client;
@@ -361,8 +363,10 @@ const Installments: React.FC = () => {
 
       const matchesClient = !q || name.includes(q) || dni.includes(q);
 
-      const statusCode = getStatusCode(i);
-      const matchesStatus = !filters.status || statusCode === filters.status;
+const statusCode = getStatusCode(i);
+const matchesStatus = filters.status
+  ? statusCode === filters.status
+  : statusCode !== "PAID";
 
       const dueISO = toISODate(i.dueDate);
       const matchesDueDate = !filters.dueDate || dueISO === filters.dueDate;
@@ -573,23 +577,25 @@ const Installments: React.FC = () => {
                           </Typography>
                         </Box>
                       ) : isPartiallyPaid(i) ? (
-                        <Button
-                          size="small"
-                          variant="contained"
-                          color="warning"
-                          onClick={() => handleOpenPayment(i.id)}
-                        >
-                          Abonar saldo
-                        </Button>
+<Button
+  size="small"
+  variant="contained"
+  color="warning"
+  onClick={() => handleOpenPayment(i.id)}
+  disabled={savingPayment}
+>
+  Abonar saldo
+</Button>
                       ) : (
-                        <Button
-                          size="small"
-                          variant="contained"
-                          color="success"
-                          onClick={() => handleOpenPayment(i.id)}
-                        >
-                          Pagar
-                        </Button>
+<Button
+  size="small"
+  variant="contained"
+  color="success"
+  onClick={() => handleOpenPayment(i.id)}
+  disabled={savingPayment}
+>
+  Pagar
+</Button>
                       )}
                     </TableCell>
                   </TableRow>
@@ -642,6 +648,7 @@ const Installments: React.FC = () => {
               value={paymentAmount}
               onChange={(e) => setPaymentAmount(e.target.value)}
               fullWidth
+              disabled={savingPayment}
             />
 
             <TextField
@@ -651,6 +658,7 @@ const Installments: React.FC = () => {
               onChange={(e) => setPaymentDate(e.target.value)}
               InputLabelProps={{ shrink: true }}
               fullWidth
+              disabled={savingPayment}
             />
 
             <TextField
@@ -661,6 +669,7 @@ const Installments: React.FC = () => {
                 setPaymentReceiver(e.target.value as PaymentReceiver)
               }
               fullWidth
+              disabled={savingPayment}
             >
               <MenuItem value="AGENCY">Agencia</MenuItem>
               <MenuItem value="STUDIO">Estudio</MenuItem>
@@ -673,17 +682,24 @@ const Installments: React.FC = () => {
               fullWidth
               multiline
               minRows={2}
+              disabled={savingPayment}
             />
           </Box>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={handleClosePayment} disabled={loading}>
-            Cancelar
-          </Button>
-          <Button onClick={handlePaymentSubmit} variant="contained" disabled={loading}>
-            Guardar
-          </Button>
-        </DialogActions>
+<DialogActions>
+  <Button onClick={handleClosePayment} disabled={savingPayment}>
+    Cancelar
+  </Button>
+
+  <LoadingActionButton
+    onClick={handlePaymentSubmit}
+    variant="contained"
+    loading={savingPayment}
+    loadingText="Guardando..."
+  >
+    Guardar
+  </LoadingActionButton>
+</DialogActions>
       </Dialog>
 
       <NotificationSnackbar

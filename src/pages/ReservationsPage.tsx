@@ -21,6 +21,7 @@ import DeleteIcon from "@mui/icons-material/Delete";
 import { useNavigate, useParams } from "react-router-dom";
 import api from "../api/api";
 import { API_URL } from "../config";
+import LoadingActionButton from "../components/LoadingActionButton";
 
 interface Guarantor {
   firstName: string;
@@ -273,8 +274,10 @@ const endpoint = id
     }
   };
 
-  const handleSubmit = async () => {
-    if (!client || !vehicle) {
+const handleSubmit = async () => {
+  if (loading) return;
+
+  if (!client || !vehicle) {
       alert("⚠️ Debes completar cliente y vehículo primero.");
       return;
     }
@@ -575,37 +578,46 @@ const endpoint = id
 
               <Box sx={{ textAlign: "right", mt: 2 }}>
                 <Tooltip title="Eliminar garante">
-                  <IconButton color="error" onClick={() => handleRemoveGuarantor(i)}>
-                    <DeleteIcon />
-                  </IconButton>
+<IconButton
+  color="error"
+  onClick={() => handleRemoveGuarantor(i)}
+  disabled={loading}
+>
+  <DeleteIcon />
+</IconButton>
                 </Tooltip>
               </Box>
             </Paper>
           );
         })}
 
-        <Button
-          startIcon={<AddIcon />}
-          variant="outlined"
-          color="secondary"
-          onClick={handleAddGuarantor}
-        >
-          Agregar garante
-        </Button>
-
+<Button
+  startIcon={<AddIcon />}
+  variant="outlined"
+  color="secondary"
+  onClick={handleAddGuarantor}
+  disabled={loading}
+>
+  Agregar garante
+</Button>
         <Box textAlign="right" mt={4} display="flex" justifyContent="flex-end" gap={2}>
-          <Button variant="outlined" onClick={() => navigate("/reservation-list")}>
-            Cancelar
-          </Button>
+<Button
+  variant="outlined"
+  onClick={() => navigate("/reservation-list")}
+  disabled={loading}
+>
+  Cancelar
+</Button>
 
-          <Button
-            variant="contained"
-            color="primary"
-            disabled={loading}
-            onClick={handleSubmit}
-          >
-            {loading ? "Guardando..." : id ? "Actualizar Reserva" : "Guardar Reserva"}
-          </Button>
+<LoadingActionButton
+  variant="contained"
+  color="primary"
+  onClick={handleSubmit}
+  loading={loading}
+  loadingText={id ? "Actualizando..." : "Guardando..."}
+>
+  {id ? "Actualizar Reserva" : "Guardar Reserva"}
+</LoadingActionButton>
         </Box>
       </Paper>
     </Box>

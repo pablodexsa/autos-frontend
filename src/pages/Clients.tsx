@@ -3,6 +3,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import api from "../api/api";
 import "./Vehicles.css";
 import { useAuth } from "../context/AuthContext";
+import LoadingActionButton from "../components/LoadingActionButton";
 
 interface Client {
   id: number;
@@ -51,6 +52,7 @@ export default function ClientsPage() {
   // ======= DATA =======
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(false);
+  const [savingClient, setSavingClient] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // ======= FILTROS (draft + applied) =======
@@ -274,10 +276,14 @@ export default function ClientsPage() {
   };
 
   // ======= SUBMIT =======
-  const onSubmit = async (ev: React.FormEvent<HTMLFormElement>) => {
-    ev.preventDefault();
+const onSubmit = async (ev: React.FormEvent<HTMLFormElement>) => {
+  ev.preventDefault();
 
-    // ✅ RBAC hard-stop
+  if (savingClient) return;
+
+  try {
+    setSavingClient(true);
+
     if (editing && !canEdit) {
       alert("No tenés permisos para editar clientes.");
       return;
@@ -287,7 +293,6 @@ export default function ClientsPage() {
       return;
     }
 
-    // ✅ Todos los campos requeridos
     if (
       !form.firstName.trim() ||
       !form.lastName.trim() ||
@@ -300,51 +305,50 @@ export default function ClientsPage() {
       return;
     }
 
-    // ✅ Confirmación antes de guardar
     const confirmMsg = editing
       ? "¿Guardar los cambios del cliente?"
       : "¿Crear el cliente?";
     if (!window.confirm(confirmMsg)) return;
 
-    try {
-      let saved: any;
+    let saved: any;
 
-      if (editing) {
-        const resp = await api.put(`/clients/${editing.id}`, form, {
-          headers: { "Content-Type": "application/json" },
-        });
-        saved = resp.data;
-      } else {
-        const resp = await api.post("/clients", form, {
-          headers: { "Content-Type": "application/json" },
-        });
-        saved = resp.data;
-      }
-
-      // ✅ Subida DNI adjunto (si hay archivo) -> AHORA ES OPCIONAL
-      if (dniFile && saved?.id) {
-        try {
-          const fd = new FormData();
-          fd.append("file", dniFile);
-          await api.post(`/clients/${saved.id}/dni`, fd);
-        } catch (err) {
-          console.error("Error subiendo DNI:", err);
-          alert(
-            "El cliente se guardó, pero hubo un error al subir el DNI adjunto."
-          );
-        }
-      }
-
-      setShowForm(false);
-      setEditing(null);
-      setDniFile(null);
-
-      await fetchClients();
-    } catch (err: any) {
-      console.error("Error guardando cliente:", err);
-      alert(err?.response?.data?.message || "Error al guardar el cliente.");
+    if (editing) {
+      const resp = await api.put(`/clients/${editing.id}`, form, {
+        headers: { "Content-Type": "application/json" },
+      });
+      saved = resp.data;
+    } else {
+      const resp = await api.post("/clients", form, {
+        headers: { "Content-Type": "application/json" },
+      });
+      saved = resp.data;
     }
-  };
+
+    if (dniFile && saved?.id) {
+      try {
+        const fd = new FormData();
+        fd.append("file", dniFile);
+        await api.post(`/clients/${saved.id}/dni`, fd);
+      } catch (err) {
+        console.error("Error subiendo DNI:", err);
+        alert(
+          "El cliente se guardó, pero hubo un error al subir el DNI adjunto."
+        );
+      }
+    }
+
+    setShowForm(false);
+    setEditing(null);
+    setDniFile(null);
+
+    await fetchClients();
+  } catch (err: any) {
+    console.error("Error guardando cliente:", err);
+    alert(err?.response?.data?.message || "Error al guardar el cliente.");
+  } finally {
+    setSavingClient(false);
+  }
+};
 
   // ======= RENDER =======
   return (
@@ -601,18 +605,26 @@ export default function ClientsPage() {
                 )}
               </div>
 
-              <div className="modal-actions">
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  onClick={handleCloseModal}
-                >
-                  Cancelar
-                </button>
-                <button type="submit" className="btn-primary">
-                  Guardar
-                </button>
-              </div>
+<div className="modal-actions">
+  <button
+    type="button"
+    className="btn-secondary"
+    onClick={handleCloseModal}
+    disabled={savingClient}
+  >
+    Cancelar
+  </button>
+
+  <LoadingActionButton
+    type="submit"
+    className="btn-primary"
+    loading={savingClient}
+    loadingText={editing ? "Guardando..." : "Creando..."}
+  >
+    {editing ? "Guardar cambios" : "Guardar cliente"}
+  </LoadingActionButton>
+</div>
+
             </form>
 
             {/* ✅ Si estás editando y ya existe DNI adjunto, ofrezco descargarlo */}

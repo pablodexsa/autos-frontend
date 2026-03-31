@@ -15,6 +15,7 @@ import {
   Checkbox,
 } from "@mui/material";
 import api from "../api/api";
+import LoadingActionButton from "../components/LoadingActionButton";
 
 type AlertSeverity = "success" | "info" | "warning" | "error";
 type AlertState = { open: boolean; message: string; severity: AlertSeverity };
@@ -34,6 +35,7 @@ const Budgets: React.FC = () => {
   const [vehicles, setVehicles] = useState<any[]>([]);
   const [selectedVehicle, setSelectedVehicle] = useState<any>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [savingBudget, setSavingBudget] = useState(false);
   const [clientId, setClientId] = useState<number | null>(null);
 
   const [form, setForm] = useState({
@@ -588,7 +590,12 @@ const Budgets: React.FC = () => {
     }));
   };
 
-  const handleSaveBudget = async () => {
+const handleSaveBudget = async () => {
+  if (savingBudget) return;
+
+  try {
+    setSavingBudget(true);
+
     if (!clientId || !selectedVehicle) {
       alert(
         "Debe seleccionar un cliente y un vehículo antes de generar el presupuesto."
@@ -661,42 +668,43 @@ const Budgets: React.FC = () => {
       montoFinanciacion: Number(form.montoFinanciacion) || 0,
     };
 
-    try {
-      const res = await api.post("/budgets", payload, {
-        headers: { "Content-Type": "application/json" },
-      });
-      const newBudget = res.data;
+    const res = await api.post("/budgets", payload, {
+      headers: { "Content-Type": "application/json" },
+    });
+    const newBudget = res.data;
 
-      const pdfUrl = `${import.meta.env.VITE_API_URL}/budgets/${newBudget.id}/pdf`;
-      const response = await fetch(pdfUrl);
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const fileName = `Presupuesto-${(form.clientName || "cliente")
-        .replace(/\s+/g, "_")
-        .replace(/[^\w\-]/g, "")}-${newBudget.id}.pdf`;
+    const pdfUrl = `${import.meta.env.VITE_API_URL}/budgets/${newBudget.id}/pdf`;
+    const response = await fetch(pdfUrl);
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const fileName = `Presupuesto-${(form.clientName || "cliente")
+      .replace(/\s+/g, "_")
+      .replace(/[^\w\-]/g, "")}-${newBudget.id}.pdf`;
 
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = fileName;
-      link.click();
-      window.open(url, "_blank");
-      window.URL.revokeObjectURL(url);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = fileName;
+    link.click();
+    window.open(url, "_blank");
+    window.URL.revokeObjectURL(url);
 
-      setAlert({
-        open: true,
-        message: "Presupuesto generado y descargado correctamente.",
-        severity: "success",
-      });
-      setPreviewOpen(false);
-    } catch (err: any) {
-      console.error("❌ Error guardando presupuesto:", err);
-      alert(
-        `Error guardando presupuesto: ${err?.response?.status} - ${
-          err?.response?.data?.message || "sin mensaje"
-        }`
-      );
-    }
-  };
+    setAlert({
+      open: true,
+      message: "Presupuesto generado y descargado correctamente.",
+      severity: "success",
+    });
+    setPreviewOpen(false);
+  } catch (err: any) {
+    console.error("❌ Error guardando presupuesto:", err);
+    alert(
+      `Error guardando presupuesto: ${err?.response?.status} - ${
+        err?.response?.data?.message || "sin mensaje"
+      }`
+    );
+  } finally {
+    setSavingBudget(false);
+  }
+};
 
   return (
     <Box>
@@ -1179,32 +1187,36 @@ const Budgets: React.FC = () => {
               </Box>
             )}
 
-          <Box textAlign="center" mt={3}>
-            <Button
-              variant="contained"
-              color="primary"
-              sx={{ mr: 2 }}
-              onClick={handleSaveBudget}
-              disabled={
-                !clientId ||
-                !selectedVehicle ||
-                !form.paymentType ||
-                hasErrors ||
-                missingInstallments ||
-                (isMotoPlanPayment && !form.selectedMotoPlan) ||
-                compositionMismatch
-              }
-            >
-              Generar y Descargar PDF
-            </Button>
-            <Button
-              variant="outlined"
-              color="secondary"
-              onClick={() => setPreviewOpen(false)}
-            >
-              Cerrar
-            </Button>
-          </Box>
+<Box textAlign="center" mt={3}>
+  <LoadingActionButton
+    variant="contained"
+    color="primary"
+    sx={{ mr: 2 }}
+    onClick={handleSaveBudget}
+    loading={savingBudget}
+    loadingText="Generando..."
+    disabled={
+      !clientId ||
+      !selectedVehicle ||
+      !form.paymentType ||
+      hasErrors ||
+      missingInstallments ||
+      (isMotoPlanPayment && !form.selectedMotoPlan) ||
+      compositionMismatch
+    }
+  >
+    Generar y Descargar PDF
+  </LoadingActionButton>
+
+  <Button
+    variant="outlined"
+    color="secondary"
+    onClick={() => setPreviewOpen(false)}
+    disabled={savingBudget}
+  >
+    Cerrar
+  </Button>
+</Box>
         </DialogContent>
       </Dialog>
 

@@ -11,7 +11,6 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  CircularProgress,
   Snackbar,
   Alert,
   Stack,
@@ -19,6 +18,7 @@ import {
 import { DataGrid, GridColDef } from "@mui/x-data-grid";
 import api from "../api/api";
 import type { RefundRow, RefundStatus } from "../types/refund";
+import LoadingActionButton from "../components/LoadingActionButton";
 
 const pesos = (n: number) =>
   new Intl.NumberFormat("es-AR", {
@@ -209,9 +209,14 @@ export default function Refunds() {
         sortable: false,
         filterable: false,
         renderCell: (p) => (
-          <Button size="small" variant="outlined" onClick={() => onDownloadPdf(p.row)}>
-            PDF
-          </Button>
+<Button
+  size="small"
+  variant="outlined"
+  onClick={() => onDownloadPdf(p.row)}
+  disabled={saving}
+>
+  PDF
+</Button>
         ),
       },
       {
@@ -221,14 +226,14 @@ export default function Refunds() {
         sortable: false,
         filterable: false,
         renderCell: (p) => (
-          <Button
-            size="small"
-            variant="contained"
-            disabled={p.row.status !== "PENDING"}
-            onClick={() => onOpenDeliver(p.row)}
-          >
-            Registrar
-          </Button>
+<Button
+  size="small"
+  variant="contained"
+  disabled={p.row.status !== "PENDING" || saving}
+  onClick={() => onOpenDeliver(p.row)}
+>
+  Registrar
+</Button>
         ),
       },
     ],
@@ -297,14 +302,15 @@ export default function Refunds() {
                 Monto sugerido: <b>{pesos(Number(selected.expectedAmount ?? 0))}</b>
               </Typography>
 
-              <TextField
-                label="Monto devuelto"
-                value={paidAmount}
-                onChange={(e) => setPaidAmount(e.target.value)}
-                type="number"
-                fullWidth
-                inputProps={{ min: 0 }}
-              />
+<TextField
+  label="Monto devuelto"
+  value={paidAmount}
+  onChange={(e) => setPaidAmount(e.target.value)}
+  type="number"
+  fullWidth
+  inputProps={{ min: 0 }}
+  disabled={saving}
+/>
             </Box>
           ) : null}
         </DialogContent>
@@ -312,9 +318,14 @@ export default function Refunds() {
           <Button onClick={onCloseDeliver} disabled={saving}>
             Cancelar
           </Button>
-          <Button onClick={onConfirmDeliver} variant="contained" disabled={saving}>
-            {saving ? <CircularProgress size={22} /> : "Confirmar"}
-          </Button>
+<LoadingActionButton
+  onClick={onConfirmDeliver}
+  variant="contained"
+  loading={saving}
+  loadingText="Confirmando..."
+>
+  Confirmar
+</LoadingActionButton>
         </DialogActions>
       </Dialog>
 

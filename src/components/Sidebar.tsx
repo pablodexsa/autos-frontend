@@ -51,6 +51,7 @@ const Sidebar: React.FC<SidebarProps> = ({ mobileOpen = false, handleDrawerToggl
     { text: "Vehículos", icon: <DirectionsCarIcon />, path: "/vehicles", key: "vehicles" },
     { text: "Clientes", icon: <PeopleIcon />, path: "/clients", key: "clients" },
     { text: "Créditos Directo", icon: <CreditScoreIcon />, path: "/directo", key: "directo" },
+    { text: "Créditos Cuota Red", icon: <CreditScoreIcon />, path: "/cuotared", key: "cuotared" },
     { text: "Generar Presupuesto", icon: <DescriptionIcon />, path: "/budgets", key: "budgets" },
     { text: "Listado de Presupuestos", icon: <DescriptionIcon />, path: "/budget-reports", key: "budget-reports" },
     { text: "Reservas", icon: <EventAvailableIcon />, path: "/reservations", key: "reservations" },

@@ -15,6 +15,7 @@ import {
   Checkbox,
 } from "@mui/material";
 import api from "../api/api";
+import LoadingActionButton from "../components/LoadingActionButton";
 
 type Vehicle = {
   id: number;
@@ -43,6 +44,7 @@ type MotoPlanOption = {
 const Sales: React.FC = () => {
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
+  const [savingSale, setSavingSale] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
 
   const [alert, setAlert] = useState<AlertState>({
@@ -599,7 +601,12 @@ const Sales: React.FC = () => {
     }));
   };
 
-  const handleSaveSale = async () => {
+const handleSaveSale = async () => {
+  if (savingSale) return;
+
+  try {
+    setSavingSale(true);
+
     if (!selectedVehicle) {
       setAlert({
         open: true,
@@ -687,45 +694,46 @@ const Sales: React.FC = () => {
       inHouseMonthlyRate: 0,
     };
 
-    try {
-      const res = await api.post("/sales", payload, {
-        headers: { "Content-Type": "application/json" },
-      });
-      const newSale = res.data;
+    const res = await api.post("/sales", payload, {
+      headers: { "Content-Type": "application/json" },
+    });
+    const newSale = res.data;
 
-      const pdfUrl = `${import.meta.env.VITE_API_URL}/sales/${newSale.id}/pdf`;
-      const response = await fetch(pdfUrl);
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const fileName = `Comprobante-Venta-${(form.clientName || "cliente")
-        .replace(/\s+/g, "_")
-        .replace(/[^\w\-]/g, "")}-${newSale.id}.pdf`;
+    const pdfUrl = `${import.meta.env.VITE_API_URL}/sales/${newSale.id}/pdf`;
+    const response = await fetch(pdfUrl);
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const fileName = `Comprobante-Venta-${(form.clientName || "cliente")
+      .replace(/\s+/g, "_")
+      .replace(/[^\w\-]/g, "")}-${newSale.id}.pdf`;
 
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = fileName;
-      link.click();
-      window.open(url, "_blank");
-      window.URL.revokeObjectURL(url);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = fileName;
+    link.click();
+    window.open(url, "_blank");
+    window.URL.revokeObjectURL(url);
 
-      setAlert({
-        open: true,
-        message: "Venta registrada y comprobante descargado correctamente.",
-        severity: "success",
-      });
-      setPreviewOpen(false);
-    } catch (err: any) {
-      console.log("❌ Error guardando venta FULL:", err);
-      console.log("❌ status:", err?.response?.status);
-      console.log("❌ data:", err?.response?.data);
-      console.log("❌ message:", err?.response?.data?.message);
-      alert(
-        `Error guardando venta: ${err?.response?.status} - ${
-          err?.response?.data?.message || "sin mensaje"
-        }`
-      );
-    }
-  };
+    setAlert({
+      open: true,
+      message: "Venta registrada y comprobante descargado correctamente.",
+      severity: "success",
+    });
+    setPreviewOpen(false);
+  } catch (err: any) {
+    console.log("❌ Error guardando venta FULL:", err);
+    console.log("❌ status:", err?.response?.status);
+    console.log("❌ data:", err?.response?.data);
+    console.log("❌ message:", err?.response?.data?.message);
+    alert(
+      `Error guardando venta: ${err?.response?.status} - ${
+        err?.response?.data?.message || "sin mensaje"
+      }`
+    );
+  } finally {
+    setSavingSale(false);
+  }
+};
 
   return (
     <Box>
@@ -1255,32 +1263,36 @@ const Sales: React.FC = () => {
               </Box>
             )}
 
-          <Box textAlign="center" mt={3}>
-            <Button
-              variant="contained"
-              color="primary"
-              sx={{ mr: 2 }}
-              onClick={handleSaveSale}
-              disabled={
-                hasErrors ||
-                !form.vehicleId ||
-                !form.paymentType ||
-                (form.paymentType === "anticipo_financiacion" &&
-                  missingInstallments) ||
-                (isMotoPlanPayment && !form.selectedMotoPlan) ||
-                compositionMismatch
-              }
-            >
-              Vender y Descargar PDF
-            </Button>
-            <Button
-              variant="outlined"
-              color="secondary"
-              onClick={() => setPreviewOpen(false)}
-            >
-              Cerrar
-            </Button>
-          </Box>
+<Box textAlign="center" mt={3}>
+  <LoadingActionButton
+    variant="contained"
+    color="primary"
+    sx={{ mr: 2 }}
+    onClick={handleSaveSale}
+    loading={savingSale}
+    loadingText="Generando..."
+    disabled={
+      hasErrors ||
+      !form.vehicleId ||
+      !form.paymentType ||
+      (form.paymentType === "anticipo_financiacion" &&
+        missingInstallments) ||
+      (isMotoPlanPayment && !form.selectedMotoPlan) ||
+      compositionMismatch
+    }
+  >
+    Vender y Descargar PDF
+  </LoadingActionButton>
+
+  <Button
+    variant="outlined"
+    color="secondary"
+    onClick={() => setPreviewOpen(false)}
+    disabled={savingSale}
+  >
+    Cerrar
+  </Button>
+</Box>
         </DialogContent>
       </Dialog>
 

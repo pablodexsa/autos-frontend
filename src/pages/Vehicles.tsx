@@ -16,6 +16,7 @@ import "./Vehicles.css";
 import { API_URL } from "../config";
 import api from "../api/api"; // para SSE y documentación
 import { useAuth } from "../context/AuthContext"; // ✅ permisos
+import LoadingActionButton from "../components/LoadingActionButton";
 
 const initialQuery: VehicleQuery = {
   page: 1,
@@ -65,6 +66,7 @@ export default function VehiclesPage() {
 
   // ======= ESTADO GENERAL =======
   const [query, setQuery] = useState<VehicleQuery>(initialQuery);
+  const [savingVehicle, setSavingVehicle] = useState(false);
   const [data, setData] = useState<{
     items: Vehicle[];
     total: number;
@@ -403,8 +405,13 @@ export default function VehiclesPage() {
   };
 
   // ======= SUBMIT FORM =======
-  const onSubmit = async (ev: React.FormEvent<HTMLFormElement>) => {
-    ev.preventDefault();
+const onSubmit = async (ev: React.FormEvent<HTMLFormElement>) => {
+  ev.preventDefault();
+
+  if (savingVehicle) return;
+
+  try {
+    setSavingVehicle(true);
 
     if (!canCreate && !editing) {
       alert("No tenés permisos para crear vehículos.");
@@ -415,7 +422,6 @@ export default function VehiclesPage() {
       return;
     }
 
-    // ✅ Guardrail: bloquear tipo no permitido en "crear"
     if (!editing) {
       if (formCategory === "CAR" && !canCreateCar) {
         alert("No tenés permisos para crear autos.");
@@ -444,52 +450,57 @@ export default function VehiclesPage() {
       isMotoPlan: fd.get("isMotoPlan") === "on",
       versionId,
       year: Number(fd.get("year") as string),
-
       kilometraje,
-
       plate: String(fd.get("plate") || ""),
       engineNumber: String(fd.get("engineNumber") || ""),
       chassisNumber: String(fd.get("chassisNumber") || ""),
-
       concesionaria: concesionariaRaw ? concesionariaRaw : null,
       procedencia: procedenciaRaw ? procedenciaRaw : null,
-
       color: String(fd.get("color") || ""),
       price: Number(fd.get("price") as string),
       status: String(fd.get("status") || "available"),
     };
 
-    try {
-      let savedId: number | undefined = editing?.id;
+    let savedId: number | undefined = editing?.id;
 
-      if (editing) {
-        await updateVehicle(editing.id, payload as any);
-      } else {
-        const created = await createVehicle(payload as any);
-        savedId = created?.id;
-      }
-
-      // 📁 Subir documentación si corresponde (en create y update)
-      if (docFile && savedId) {
-        const form = new FormData();
-        form.append("file", docFile);
-
-        await api.post(`/vehicles/${savedId}/documentation`, form, {
-          headers: { "Content-Type": "multipart/form-data" },
-        });
-      }
-
-      setShowForm(false);
-      setEditing(null);
-      setDocFile(null);
-      if (canCreateMoto && !canCreateCar) setFormCategory("MOTORCYCLE");
-      else setFormCategory("CAR");
-      await fetchData();
-    } catch (err) {
-      console.error(err);
-      alert("Error al guardar el vehículo.");
+    if (editing) {
+      await updateVehicle(editing.id, payload as any);
+    } else {
+      const created = await createVehicle(payload as any);
+      savedId = created?.id;
     }
-  };
+
+    if (docFile && savedId) {
+      const form = new FormData();
+      form.append("file", docFile);
+
+      await api.post(`/vehicles/${savedId}/documentation`, form, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+    }
+
+    setShowForm(false);
+    setEditing(null);
+    setDocFile(null);
+
+    if (canCreateMoto && !canCreateCar)
+      setFormCategory("MOTORCYCLE");
+    else setFormCategory("CAR");
+
+    setFormBrandId(undefined);
+    setFormModelId(undefined);
+    setFormVersionId(undefined);
+    setFormModels([]);
+    setFormVersions([]);
+
+    await fetchData();
+  } catch (err) {
+    console.error(err);
+    alert("Error al guardar el vehículo.");
+  } finally {
+    setSavingVehicle(false);
+  }
+};
 
   const onDelete = async (v: Vehicle) => {
     if (!canDelete) {
@@ -1007,6 +1018,7 @@ export default function VehiclesPage() {
                 <button
                   type="button"
                   className="btn-secondary"
+                  disabled={savingVehicle}
                   onClick={() => {
                     setShowForm(false);
                     setEditing(null);
@@ -1025,9 +1037,14 @@ export default function VehiclesPage() {
                 >
                   Cancelar
                 </button>
-                <button type="submit" className="btn-primary">
-                  Guardar
-                </button>
+<LoadingActionButton
+  type="submit"
+  className="btn-primary"
+  loading={savingVehicle}
+  loadingText={editing ? "Guardando..." : "Creando..."}
+>
+  {editing ? "Guardar cambios" : "Guardar vehículo"}
+</LoadingActionButton>
               </div>
             </form>
           </div>

@@ -25,6 +25,6 @@ export async function registerInstallmentPayment(
     `/installments/${id}/register-payment`,
     payload
   );
-  showSuccess("Pago aplicado a la cuota");
+
   return data;
 }
