@@ -461,21 +461,8 @@ export default function ManagerDashboard() {
     nextMonthDate.getMonth() + 1
   ).padStart(2, "0")}`;
 
-  const currentMonthData = (data?.installmentsByDueMonth || []).find(
-    (m) => m.month === currentMonthKey
-  );
-
-  const nextMonthData = (data?.installmentsByDueMonth || []).find(
-    (m) => m.month === nextMonthKey
-  );
-
-  const totalMesActual =
-    (currentMonthData?.pendingAmount || 0) +
-    (currentMonthData?.paidAmount || 0);
-
-  const totalMesSiguiente =
-    (nextMonthData?.pendingAmount || 0) +
-    (nextMonthData?.paidAmount || 0);
+const totalMesActual = data?.summary.currentMonthInstallmentsAmount || 0;
+const totalMesSiguiente = data?.summary.nextMonthInstallmentsAmount || 0;
 
   const cobranzasMes = data?.summary.monthlyCollectedInstallmentsAmount || 0;
   const backlogTotal = data?.summary.receivablesBacklogAmount || 0;
