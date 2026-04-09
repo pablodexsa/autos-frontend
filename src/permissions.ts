@@ -23,6 +23,7 @@
 
 owner: [
   "home",
+  "dashboard_gerencial",
   "vehicles",
   "clients",
   "directo",
@@ -110,6 +111,7 @@ owner: [
 
   legales: [
     "home",
+    "dashboard_gerencial",
     "vehicles",
     "clients",
     "directo",
