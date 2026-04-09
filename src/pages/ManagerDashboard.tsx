@@ -14,26 +14,35 @@ import {
   TableHead,
   TableRow,
   Typography,
+  LinearProgress,
+  Chip,
+  Divider,
 } from "@mui/material";
-import TrendingUpIcon from "@mui/icons-material/TrendingUp";
 import PointOfSaleIcon from "@mui/icons-material/PointOfSale";
 import PaymentsIcon from "@mui/icons-material/Payments";
 import WarningAmberIcon from "@mui/icons-material/WarningAmber";
 import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
 import TimelineIcon from "@mui/icons-material/Timeline";
 import EventAvailableIcon from "@mui/icons-material/EventAvailable";
-import MoneyOffIcon from "@mui/icons-material/MoneyOff";
 import AccountBalanceWalletIcon from "@mui/icons-material/AccountBalanceWallet";
+import PercentIcon from "@mui/icons-material/Percent";
+import ErrorOutlineIcon from "@mui/icons-material/ErrorOutline";
+import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
+import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
+import BoltIcon from "@mui/icons-material/Bolt";
+import AccessTimeIcon from "@mui/icons-material/AccessTime";
+import TrendingDownIcon from "@mui/icons-material/TrendingDown";
+import InsightsIcon from "@mui/icons-material/Insights";
+import AssignmentTurnedInIcon from "@mui/icons-material/AssignmentTurnedIn";
+import PriorityHighIcon from "@mui/icons-material/PriorityHigh";
+import AutorenewIcon from "@mui/icons-material/Autorenew";
 import {
   Bar,
   BarChart,
   CartesianGrid,
-  Cell,
   ComposedChart,
   Legend,
   Line,
-  Pie,
-  PieChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -64,9 +73,91 @@ function formatMonth(month: string) {
   const [year, m] = month.split("-");
   const date = new Date(Number(year), Number(m) - 1, 1);
   return new Intl.DateTimeFormat("es-AR", {
-    month: "short",
-    year: "2-digit",
+    month: "long",
+    year: "numeric",
   }).format(date);
+}
+
+function getPerformanceColor(ratio: number) {
+  if (ratio >= 0.85) return "#66bb6a";
+  if (ratio >= 0.6) return "#ffa726";
+  return "#ef5350";
+}
+
+function getPerformanceLabel(ratio: number) {
+  if (ratio >= 0.85) return "Cobranza saludable";
+  if (ratio >= 0.6) return "Cobranza en seguimiento";
+  return "Cobranza baja";
+}
+
+function getDebtRiskColor(overdueRatio: number) {
+  if (overdueRatio >= 0.5) return "#ef5350";
+  if (overdueRatio >= 0.25) return "#ffa726";
+  return "#66bb6a";
+}
+
+function getNetColor(value: number) {
+  if (value > 0) return "#66bb6a";
+  if (value < 0) return "#ef5350";
+  return "#90a4ae";
+}
+
+function normalizeStatus(status?: string | null) {
+  return (status || "").trim().toUpperCase();
+}
+
+function getStatusChipProps(status?: string | null) {
+  const normalized = normalizeStatus(status);
+
+  if (
+    normalized.includes("VENCIDA") ||
+    normalized.includes("VENCIDO") ||
+    normalized.includes("PARCIAL + VENCIDA") ||
+    normalized.includes("PARCIAL+VENCIDA")
+  ) {
+    return {
+      label: status || "Vencida",
+      sx: {
+        backgroundColor: "rgba(239,83,80,0.18)",
+        color: "#ef5350",
+        fontWeight: 700,
+      },
+    };
+  }
+
+  if (
+    normalized.includes("PENDIENTE") ||
+    normalized.includes("PARCIAL")
+  ) {
+    return {
+      label: status || "Pendiente",
+      sx: {
+        backgroundColor: "rgba(255,167,38,0.18)",
+        color: "#ffa726",
+        fontWeight: 700,
+      },
+    };
+  }
+
+  if (normalized.includes("PAGADA") || normalized.includes("PAID")) {
+    return {
+      label: status || "Pagada",
+      sx: {
+        backgroundColor: "rgba(102,187,106,0.18)",
+        color: "#66bb6a",
+        fontWeight: 700,
+      },
+    };
+  }
+
+  return {
+    label: status || "-",
+    sx: {
+      backgroundColor: "rgba(144,164,174,0.18)",
+      color: "#90a4ae",
+      fontWeight: 700,
+    },
+  };
 }
 
 type KpiCardProps = {
@@ -75,9 +166,19 @@ type KpiCardProps = {
   subtitle?: string;
   icon: React.ReactNode;
   borderColor: string;
+  progressValue?: number;
+  valueColor?: string;
 };
 
-function KpiCard({ title, value, subtitle, icon, borderColor }: KpiCardProps) {
+function KpiCard({
+  title,
+  value,
+  subtitle,
+  icon,
+  borderColor,
+  progressValue,
+  valueColor,
+}: KpiCardProps) {
   return (
     <Card
       sx={{
@@ -85,6 +186,7 @@ function KpiCard({ title, value, subtitle, icon, borderColor }: KpiCardProps) {
         border: `1px solid ${borderColor}`,
         background:
           "linear-gradient(180deg, rgba(24,24,24,0.98) 0%, rgba(15,15,15,0.98) 100%)",
+        boxShadow: "0 8px 24px rgba(0,0,0,0.25)",
       }}
     >
       <CardContent>
@@ -94,13 +196,19 @@ function KpiCard({ title, value, subtitle, icon, borderColor }: KpiCardProps) {
           alignItems="flex-start"
           spacing={2}
         >
-          <Box>
+          <Box sx={{ flex: 1 }}>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
               {title}
             </Typography>
-            <Typography variant="h5" fontWeight={700}>
+
+            <Typography
+              variant="h5"
+              fontWeight={800}
+              sx={{ color: valueColor || "inherit" }}
+            >
               {value}
             </Typography>
+
             {subtitle ? (
               <Typography
                 variant="caption"
@@ -109,6 +217,20 @@ function KpiCard({ title, value, subtitle, icon, borderColor }: KpiCardProps) {
               >
                 {subtitle}
               </Typography>
+            ) : null}
+
+            {typeof progressValue === "number" ? (
+              <Box sx={{ mt: 1.5 }}>
+                <LinearProgress
+                  variant="determinate"
+                  value={Math.max(0, Math.min(100, progressValue))}
+                  sx={{
+                    height: 8,
+                    borderRadius: 999,
+                    backgroundColor: "rgba(255,255,255,0.08)",
+                  }}
+                />
+              </Box>
             ) : null}
           </Box>
 
@@ -121,6 +243,7 @@ function KpiCard({ title, value, subtitle, icon, borderColor }: KpiCardProps) {
               alignItems: "center",
               justifyContent: "center",
               backgroundColor: "rgba(255,255,255,0.06)",
+              color: borderColor,
             }}
           >
             {icon}
@@ -177,23 +300,104 @@ function InstallmentsTable({
               </TableCell>
             </TableRow>
           ) : (
-            rows.map((row) => (
-              <TableRow key={row.id} hover>
-                <TableCell>{row.installmentNumber ?? "-"}</TableCell>
-                <TableCell>{formatDate(row.dueDate)}</TableCell>
-                <TableCell align="right">{formatCurrency(row.amount)}</TableCell>
-                <TableCell align="right">
-                  {formatCurrency(row.remainingAmount)}
-                </TableCell>
-                {showDaysOverdue ? (
-                  <TableCell align="right">{row.daysOverdue ?? 0}</TableCell>
-                ) : null}
-                <TableCell>{row.status || "-"}</TableCell>
-              </TableRow>
-            ))
+            rows.map((row) => {
+              const chipProps = getStatusChipProps(row.status);
+
+              return (
+                <TableRow key={row.id} hover>
+                  <TableCell>{row.installmentNumber ?? "-"}</TableCell>
+                  <TableCell>{formatDate(row.dueDate)}</TableCell>
+                  <TableCell align="right">{formatCurrency(row.amount)}</TableCell>
+                  <TableCell align="right">
+                    {formatCurrency(row.remainingAmount)}
+                  </TableCell>
+                  {showDaysOverdue ? (
+                    <TableCell align="right">{row.daysOverdue ?? 0}</TableCell>
+                  ) : null}
+                  <TableCell>
+                    <Chip
+                      size="small"
+                      label={chipProps.label}
+                      sx={chipProps.sx}
+                    />
+                  </TableCell>
+                </TableRow>
+              );
+            })
           )}
         </TableBody>
       </Table>
+    </Paper>
+  );
+}
+
+type ExecutiveMiniStatProps = {
+  label: string;
+  value: string;
+  color: string;
+  icon: React.ReactNode;
+};
+
+function ExecutiveMiniStat({
+  label,
+  value,
+  color,
+  icon,
+}: ExecutiveMiniStatProps) {
+  return (
+    <Paper
+      sx={{
+        p: 2,
+        border: `1px solid ${color}`,
+        background:
+          "linear-gradient(180deg, rgba(24,24,24,0.98) 0%, rgba(15,15,15,0.98) 100%)",
+        height: "100%",
+      }}
+    >
+      <Stack direction="row" spacing={1.5} alignItems="center">
+        <Box sx={{ color }}>{icon}</Box>
+        <Box>
+          <Typography variant="body2" color="text.secondary">
+            {label}
+          </Typography>
+          <Typography variant="h6" fontWeight={800} sx={{ color }}>
+            {value}
+          </Typography>
+        </Box>
+      </Stack>
+    </Paper>
+  );
+}
+
+type ActionCardProps = {
+  title: string;
+  description: string;
+  color: string;
+  icon: React.ReactNode;
+};
+
+function ActionCard({ title, description, color, icon }: ActionCardProps) {
+  return (
+    <Paper
+      sx={{
+        p: 2,
+        height: "100%",
+        border: `1px solid ${color}`,
+        background:
+          "linear-gradient(180deg, rgba(24,24,24,0.98) 0%, rgba(15,15,15,0.98) 100%)",
+      }}
+    >
+      <Stack direction="row" spacing={1.5} alignItems="flex-start">
+        <Box sx={{ color, mt: 0.25 }}>{icon}</Box>
+        <Box>
+          <Typography variant="subtitle1" fontWeight={800}>
+            {title}
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+            {description}
+          </Typography>
+        </Box>
+      </Stack>
     </Paper>
   );
 }
@@ -227,40 +431,13 @@ export default function ManagerDashboard() {
     };
   }, []);
 
-  const salesChartData = useMemo(
-    () =>
-      (data?.monthlySales || []).map((item) => ({
-        ...item,
-        label: formatMonth(item.month),
-      })),
-    [data],
-  );
-
-  const collectionsChartData = useMemo(
-    () =>
-      (data?.monthlyCollections || []).map((item) => ({
-        ...item,
-        label: formatMonth(item.month),
-      })),
-    [data],
-  );
-
-  const expensesChartData = useMemo(
-    () =>
-      (data?.monthlyExpenses || []).map((item) => ({
-        ...item,
-        label: formatMonth(item.month),
-      })),
-    [data],
-  );
-
   const cashflowChartData = useMemo(
     () =>
       (data?.monthlyCashflow || []).map((item) => ({
         ...item,
         label: formatMonth(item.month),
       })),
-    [data],
+    [data]
   );
 
   const dueMonthChartData = useMemo(
@@ -269,27 +446,134 @@ export default function ManagerDashboard() {
         ...item,
         label: formatMonth(item.month),
       })),
-    [data],
+    [data]
   );
 
   const agingData = data?.receivablesAging || [];
 
-  const backlogStatusData = useMemo(
-    () => [
-      {
-        name: "Vencido",
-        amount: data?.summary.overdueInstallmentsAmount || 0,
-      },
-      {
-        name: "A vencer",
-        amount: data?.summary.notYetDueInstallmentsAmount || 0,
-      },
-    ],
-    [data],
+  const now = new Date();
+  const currentMonthKey = `${now.getFullYear()}-${String(
+    now.getMonth() + 1
+  ).padStart(2, "0")}`;
+
+  const nextMonthDate = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+  const nextMonthKey = `${nextMonthDate.getFullYear()}-${String(
+    nextMonthDate.getMonth() + 1
+  ).padStart(2, "0")}`;
+
+  const currentMonthData = (data?.installmentsByDueMonth || []).find(
+    (m) => m.month === currentMonthKey
   );
 
-  const agingColors = ["#ffb74d", "#ff9800", "#ef5350", "#b71c1c"];
-  const backlogColors = ["#ef5350", "#42a5f5"];
+  const nextMonthData = (data?.installmentsByDueMonth || []).find(
+    (m) => m.month === nextMonthKey
+  );
+
+  const totalMesActual =
+    (currentMonthData?.pendingAmount || 0) +
+    (currentMonthData?.paidAmount || 0);
+
+  const totalMesSiguiente =
+    (nextMonthData?.pendingAmount || 0) +
+    (nextMonthData?.paidAmount || 0);
+
+  const cobranzasMes = data?.summary.monthlyCollectedInstallmentsAmount || 0;
+  const backlogTotal = data?.summary.receivablesBacklogAmount || 0;
+  const backlogVencido = data?.summary.overdueInstallmentsAmount || 0;
+  const backlogAVencer = data?.summary.notYetDueInstallmentsAmount || 0;
+  const resultadoNetoMes = data?.summary.monthlyNetAmount || 0;
+
+  const porcentajeCobranzaMes =
+    totalMesActual > 0 ? cobranzasMes / totalMesActual : 0;
+
+  const proporcionVencido =
+    backlogTotal > 0 ? backlogVencido / backlogTotal : 0;
+
+  const cobranzaColor = getPerformanceColor(porcentajeCobranzaMes);
+  const cobranzaLabel = getPerformanceLabel(porcentajeCobranzaMes);
+  const riesgoMoraColor = getDebtRiskColor(proporcionVencido);
+  const netColor = getNetColor(resultadoNetoMes);
+
+  const alertasEjecutivas = [
+    porcentajeCobranzaMes < 0.6
+      ? {
+          severity: "error" as const,
+          icon: <ErrorOutlineIcon fontSize="small" />,
+          text: `La cobranza del mes está en ${(porcentajeCobranzaMes * 100).toFixed(
+            0
+          )}% del objetivo.`,
+        }
+      : porcentajeCobranzaMes < 0.85
+      ? {
+          severity: "warning" as const,
+          icon: <InfoOutlinedIcon fontSize="small" />,
+          text: `La cobranza del mes está en ${(porcentajeCobranzaMes * 100).toFixed(
+            0
+          )}%. Conviene seguirla de cerca.`,
+        }
+      : {
+          severity: "success" as const,
+          icon: <CheckCircleOutlineIcon fontSize="small" />,
+          text: `La cobranza del mes está saludable: ${(porcentajeCobranzaMes * 100).toFixed(
+            0
+          )}% del objetivo.`,
+        },
+    proporcionVencido >= 0.5
+      ? {
+          severity: "error" as const,
+          icon: <WarningAmberIcon fontSize="small" />,
+          text: "Más del 50% del backlog corresponde a cuotas vencidas.",
+        }
+      : proporcionVencido >= 0.25
+      ? {
+          severity: "warning" as const,
+          icon: <WarningAmberIcon fontSize="small" />,
+          text: "Una parte relevante del backlog ya está vencida.",
+        }
+      : {
+          severity: "success" as const,
+          icon: <CheckCircleOutlineIcon fontSize="small" />,
+          text: "La mayor parte del backlog todavía no está vencida.",
+        },
+  ];
+
+  const accionesSugeridas = [
+    {
+      title: "Priorizar cobranza vencida",
+      description:
+        backlogVencido > 0
+          ? `Hay ${formatCurrency(
+              backlogVencido
+            )} en cuotas vencidas. Conviene enfocar seguimiento en esa cartera primero.`
+          : "No hay deuda vencida relevante para priorizar.",
+      color: riesgoMoraColor,
+      icon: <PriorityHighIcon />,
+    },
+    {
+      title: "Anticipar próximas gestiones",
+      description:
+        backlogAVencer > 0
+          ? `El próximo bloque a gestionar suma ${formatCurrency(
+              backlogAVencer
+            )}. Conviene hacer seguimiento preventivo antes del vencimiento.`
+          : "No hay cuotas próximas a vencer con peso significativo.",
+      color: "#42a5f5",
+      icon: <AutorenewIcon />,
+    },
+    {
+      title: "Medir cierre del mes",
+      description:
+        totalMesActual > 0
+          ? `Hoy se cobraron ${formatCurrency(
+              cobranzasMes
+            )} sobre ${formatCurrency(
+              totalMesActual
+            )} previstos para el mes actual.`
+          : "No hay previsión cargada para el mes actual.",
+      color: cobranzaColor,
+      icon: <AssignmentTurnedInIcon />,
+    },
+  ];
 
   if (loading) {
     return (
@@ -323,138 +607,296 @@ export default function ManagerDashboard() {
             Dashboard Gerencial
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-            Resumen financiero, ventas, cobranzas, egresos y backlog de cuotas.
+            Resumen financiero y de cobranzas con foco ejecutivo.
           </Typography>
         </Box>
 
+        <Paper
+          sx={{
+            p: 2.5,
+            border: "1px solid rgba(255,255,255,0.08)",
+            background:
+              "linear-gradient(180deg, rgba(28,28,28,0.98) 0%, rgba(14,14,14,0.98) 100%)",
+          }}
+        >
+          <Stack spacing={2}>
+            <Box>
+              <Typography variant="h6" sx={{ fontWeight: 800 }}>
+                Resumen ejecutivo
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                Lectura rápida del estado actual del negocio.
+              </Typography>
+            </Box>
+
+            <Grid container spacing={2}>
+              <Grid item xs={12} sm={6} lg={3}>
+                <ExecutiveMiniStat
+                  label="Cobrado este mes"
+                  value={formatCurrency(cobranzasMes)}
+                  color={cobranzaColor}
+                  icon={<BoltIcon />}
+                />
+              </Grid>
+              <Grid item xs={12} sm={6} lg={3}>
+                <ExecutiveMiniStat
+                  label="Previsto este mes"
+                  value={formatCurrency(totalMesActual)}
+                  color="#42a5f5"
+                  icon={<AccessTimeIcon />}
+                />
+              </Grid>
+              <Grid item xs={12} sm={6} lg={3}>
+                <ExecutiveMiniStat
+                  label="Backlog vencido"
+                  value={formatCurrency(backlogVencido)}
+                  color={riesgoMoraColor}
+                  icon={<TrendingDownIcon />}
+                />
+              </Grid>
+              <Grid item xs={12} sm={6} lg={3}>
+                <ExecutiveMiniStat
+                  label="Resultado neto mes"
+                  value={formatCurrency(resultadoNetoMes)}
+                  color={netColor}
+                  icon={<InsightsIcon />}
+                />
+              </Grid>
+            </Grid>
+          </Stack>
+        </Paper>
+
         <Grid container spacing={2}>
-          <Grid item xs={12} sm={6} md={3}>
-            <KpiCard
-              title="Ventas del mes"
-              value={String(data.summary.monthlySalesCount || 0)}
-              subtitle={formatCurrency(data.summary.monthlySalesAmount)}
-              icon={<TrendingUpIcon />}
-              borderColor="#29b6f6"
-            />
-          </Grid>
-
-          <Grid item xs={12} sm={6} md={3}>
-            <KpiCard
-              title="Cobrado en cuotas (mes)"
-              value={formatCurrency(
-                data.summary.monthlyCollectedInstallmentsAmount,
-              )}
-              subtitle={`${
-                data.summary.monthlyCollectedInstallmentsCount || 0
-              } cuotas cobradas`}
-              icon={<PointOfSaleIcon />}
-              borderColor="#66bb6a"
-            />
-          </Grid>
-
-          <Grid item xs={12} sm={6} md={3}>
-            <KpiCard
-              title="Egresos del mes"
-              value={formatCurrency(data.summary.monthlyExpensesAmount)}
-              subtitle={`${
-                data.summary.monthlyExpensesCount || 0
-              } egresos / devoluciones`}
-              icon={<MoneyOffIcon />}
-              borderColor="#ff7043"
-            />
-          </Grid>
-
-          <Grid item xs={12} sm={6} md={3}>
-            <KpiCard
-              title="Resultado neto del mes"
-              value={formatCurrency(data.summary.monthlyNetAmount)}
-              subtitle="Cobrado en cuotas - egresos"
-              icon={<AccountBalanceWalletIcon />}
-              borderColor={
-                data.summary.monthlyNetAmount >= 0 ? "#66bb6a" : "#ef5350"
-              }
-            />
-          </Grid>
+          {alertasEjecutivas.map((alerta, index) => (
+            <Grid item xs={12} md={6} key={index}>
+              <Alert
+                severity={alerta.severity}
+                icon={alerta.icon}
+                sx={{
+                  borderRadius: 2,
+                  alignItems: "center",
+                }}
+              >
+                {alerta.text}
+              </Alert>
+            </Grid>
+          ))}
         </Grid>
 
         <Grid container spacing={2}>
-          <Grid item xs={12} sm={6} md={4}>
+          <Grid item xs={12} sm={6} lg={3}>
             <KpiCard
-              title="Backlog total de cuotas"
-              value={formatCurrency(data.summary.receivablesBacklogAmount)}
-              subtitle={`${
-                data.summary.pendingInstallmentsCount || 0
-              } cuotas pendientes`}
-              icon={<ReceiptLongIcon />}
-              borderColor="#ab47bc"
+              title="Total a ingresar mes actual"
+              value={formatCurrency(totalMesActual)}
+              subtitle={formatMonth(currentMonthKey)}
+              icon={<AccountBalanceWalletIcon />}
+              borderColor="#66bb6a"
+              valueColor="#66bb6a"
             />
           </Grid>
 
-          <Grid item xs={12} sm={6} md={4}>
+          <Grid item xs={12} sm={6} lg={3}>
             <KpiCard
-              title="Backlog vencido"
-              value={formatCurrency(data.summary.overdueInstallmentsAmount)}
-              subtitle={`${
-                data.summary.overdueInstallmentsCount || 0
-              } cuotas vencidas`}
-              icon={<WarningAmberIcon />}
-              borderColor="#ef5350"
-            />
-          </Grid>
-
-          <Grid item xs={12} sm={12} md={4}>
-            <KpiCard
-              title="Backlog a vencer"
-              value={formatCurrency(data.summary.notYetDueInstallmentsAmount)}
-              subtitle={`${
-                data.summary.notYetDueInstallmentsCount || 0
-              } cuotas pendientes no vencidas`}
+              title="Total a ingresar mes siguiente"
+              value={formatCurrency(totalMesSiguiente)}
+              subtitle={formatMonth(nextMonthKey)}
               icon={<EventAvailableIcon />}
               borderColor="#42a5f5"
+              valueColor="#42a5f5"
+            />
+          </Grid>
+
+          <Grid item xs={12} sm={6} lg={3}>
+            <KpiCard
+              title="Total cuotas pendientes"
+              value={formatCurrency(backlogTotal)}
+              subtitle={`${data.summary.pendingInstallmentsCount || 0} cuotas pendientes`}
+              icon={<ReceiptLongIcon />}
+              borderColor="#ab47bc"
+              valueColor="#ab47bc"
+            />
+          </Grid>
+
+          <Grid item xs={12} sm={6} lg={3}>
+            <KpiCard
+              title="Pagos del mes"
+              value={formatCurrency(cobranzasMes)}
+              subtitle={`${data.summary.monthlyCollectedInstallmentsCount || 0} cuotas cobradas`}
+              icon={<PointOfSaleIcon />}
+              borderColor={cobranzaColor}
+              valueColor={cobranzaColor}
             />
           </Grid>
         </Grid>
+
+        <Grid container spacing={2}>
+          <Grid item xs={12} md={4}>
+            <KpiCard
+              title="% de cobranza del mes"
+              value={`${(porcentajeCobranzaMes * 100).toFixed(0)}%`}
+              subtitle={cobranzaLabel}
+              icon={<PercentIcon />}
+              borderColor={cobranzaColor}
+              valueColor={cobranzaColor}
+              progressValue={porcentajeCobranzaMes * 100}
+            />
+          </Grid>
+
+          <Grid item xs={12} md={4}>
+            <KpiCard
+              title="Backlog vencido"
+              value={formatCurrency(backlogVencido)}
+              subtitle={`${data.summary.overdueInstallmentsCount || 0} cuotas vencidas`}
+              icon={<WarningAmberIcon />}
+              borderColor={riesgoMoraColor}
+              valueColor={riesgoMoraColor}
+            />
+          </Grid>
+
+          <Grid item xs={12} md={4}>
+            <KpiCard
+              title="Backlog a vencer"
+              value={formatCurrency(backlogAVencer)}
+              subtitle={`${data.summary.notYetDueInstallmentsCount || 0} cuotas pendientes no vencidas`}
+              icon={<EventAvailableIcon />}
+              borderColor="#42a5f5"
+              valueColor="#42a5f5"
+            />
+          </Grid>
+        </Grid>
+
+        <Paper
+          sx={{
+            p: 2,
+            border: "1px solid rgba(255,255,255,0.08)",
+            background:
+              "linear-gradient(180deg, rgba(24,24,24,0.98) 0%, rgba(15,15,15,0.98) 100%)",
+          }}
+        >
+          <Stack spacing={2}>
+            <Box>
+              <Typography variant="h6" sx={{ fontWeight: 700 }}>
+                Foco de gestión
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                Qué conviene mirar primero.
+              </Typography>
+            </Box>
+
+            <Divider />
+
+            <Stack
+              direction={{ xs: "column", md: "row" }}
+              spacing={2}
+              justifyContent="space-between"
+              alignItems={{ xs: "flex-start", md: "center" }}
+            >
+              <Box>
+                <Typography variant="body1" fontWeight={700}>
+                  Cobrado: {formatCurrency(cobranzasMes)} de{" "}
+                  {formatCurrency(totalMesActual)} previstos para el mes actual.
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                  Próximo mes proyectado: {formatCurrency(totalMesSiguiente)}.
+                </Typography>
+              </Box>
+
+              <Stack direction="row" spacing={1} flexWrap="wrap">
+                <Chip
+                  label={`Cobranza ${(porcentajeCobranzaMes * 100).toFixed(0)}%`}
+                  sx={{
+                    backgroundColor: `${cobranzaColor}22`,
+                    color: cobranzaColor,
+                    fontWeight: 700,
+                  }}
+                />
+                <Chip
+                  label={`Vencido ${(proporcionVencido * 100).toFixed(0)}% del backlog`}
+                  sx={{
+                    backgroundColor: `${riesgoMoraColor}22`,
+                    color: riesgoMoraColor,
+                    fontWeight: 700,
+                  }}
+                />
+                <Chip
+                  label={`Resultado ${resultadoNetoMes >= 0 ? "positivo" : "negativo"}`}
+                  sx={{
+                    backgroundColor: `${netColor}22`,
+                    color: netColor,
+                    fontWeight: 700,
+                  }}
+                />
+              </Stack>
+            </Stack>
+          </Stack>
+        </Paper>
 
         <Grid container spacing={2}>
           <Grid item xs={12} lg={6}>
-            <Paper
-              sx={{
-                p: 2,
-                height: 380,
-                border: "1px solid rgba(255,255,255,0.08)",
-              }}
-            >
-              <Typography variant="h6" sx={{ mb: 2, fontWeight: 700 }}>
-                Ventas mensuales
-              </Typography>
-
-              <ResponsiveContainer width="100%" height="90%">
-                <BarChart data={salesChartData}>
-                  <CartesianGrid
-                    strokeDasharray="3 3"
-                    stroke="rgba(255,255,255,0.08)"
-                  />
-                  <XAxis dataKey="label" />
-                  <YAxis
-                    tickFormatter={(value) => `${Math.round(value / 1000)}k`}
-                  />
-                  <Tooltip
-                    formatter={(value: number) =>
-                      formatCurrency(Number(value))
-                    }
-                  />
-                  <Legend />
-                  <Bar
-                    dataKey="amount"
-                    name="Monto vendido"
-                    fill="#29b6f6"
-                    radius={[6, 6, 0, 0]}
-                  />
-                </BarChart>
-              </ResponsiveContainer>
-            </Paper>
+            <InstallmentsTable
+              title="Top 10 cuotas vencidas"
+              rows={data.topOverdueInstallments}
+              showDaysOverdue
+            />
           </Grid>
 
+          <Grid item xs={12} lg={6}>
+            <InstallmentsTable
+              title="Próximas 10 cuotas a vencer"
+              rows={data.upcomingInstallments}
+            />
+          </Grid>
+        </Grid>
+
+        <Grid container spacing={2}>
+          <Grid item xs={12} sm={6} md={3}>
+            <KpiCard
+              title="Cuotas pendientes"
+              value={String(data.summary.pendingInstallmentsCount || 0)}
+              subtitle={formatCurrency(data.summary.pendingInstallmentsAmount)}
+              icon={<PaymentsIcon />}
+              borderColor="#ffa726"
+              valueColor="#ffa726"
+            />
+          </Grid>
+
+          <Grid item xs={12} sm={6} md={3}>
+            <KpiCard
+              title="Cuotas vencidas"
+              value={String(data.summary.overdueInstallmentsCount || 0)}
+              subtitle={formatCurrency(data.summary.overdueInstallmentsAmount)}
+              icon={<WarningAmberIcon />}
+              borderColor="#ef5350"
+              valueColor="#ef5350"
+            />
+          </Grid>
+
+          <Grid item xs={12} sm={6} md={3}>
+            <KpiCard
+              title="Cuotas a vencer"
+              value={String(data.summary.notYetDueInstallmentsCount || 0)}
+              subtitle={formatCurrency(
+                data.summary.notYetDueInstallmentsAmount
+              )}
+              icon={<EventAvailableIcon />}
+              borderColor="#42a5f5"
+              valueColor="#42a5f5"
+            />
+          </Grid>
+
+          <Grid item xs={12} sm={6} md={3}>
+            <KpiCard
+              title="Series mensuales"
+              value={String((data.monthlySales || []).length)}
+              subtitle="Últimos 12 meses"
+              icon={<TimelineIcon />}
+              borderColor="#7e57c2"
+              valueColor="#7e57c2"
+            />
+          </Grid>
+        </Grid>
+
+        <Grid container spacing={2}>
           <Grid item xs={12} lg={6}>
             <Paper
               sx={{
@@ -507,94 +949,12 @@ export default function ManagerDashboard() {
               </ResponsiveContainer>
             </Paper>
           </Grid>
-        </Grid>
-
-        <Grid container spacing={2}>
-          <Grid item xs={12} lg={6}>
-            <Paper
-              sx={{
-                p: 2,
-                height: 380,
-                border: "1px solid rgba(255,255,255,0.08)",
-              }}
-            >
-              <Typography variant="h6" sx={{ mb: 2, fontWeight: 700 }}>
-                Cobranzas mensuales de cuotas
-              </Typography>
-
-              <ResponsiveContainer width="100%" height="90%">
-                <BarChart data={collectionsChartData}>
-                  <CartesianGrid
-                    strokeDasharray="3 3"
-                    stroke="rgba(255,255,255,0.08)"
-                  />
-                  <XAxis dataKey="label" />
-                  <YAxis
-                    tickFormatter={(value) => `${Math.round(value / 1000)}k`}
-                  />
-                  <Tooltip
-                    formatter={(value: number) =>
-                      formatCurrency(Number(value))
-                    }
-                  />
-                  <Legend />
-                  <Bar
-                    dataKey="amount"
-                    name="Cobrado"
-                    fill="#66bb6a"
-                    radius={[6, 6, 0, 0]}
-                  />
-                </BarChart>
-              </ResponsiveContainer>
-            </Paper>
-          </Grid>
 
           <Grid item xs={12} lg={6}>
             <Paper
               sx={{
                 p: 2,
                 height: 380,
-                border: "1px solid rgba(255,255,255,0.08)",
-              }}
-            >
-              <Typography variant="h6" sx={{ mb: 2, fontWeight: 700 }}>
-                Egresos mensuales
-              </Typography>
-
-              <ResponsiveContainer width="100%" height="90%">
-                <BarChart data={expensesChartData}>
-                  <CartesianGrid
-                    strokeDasharray="3 3"
-                    stroke="rgba(255,255,255,0.08)"
-                  />
-                  <XAxis dataKey="label" />
-                  <YAxis
-                    tickFormatter={(value) => `${Math.round(value / 1000)}k`}
-                  />
-                  <Tooltip
-                    formatter={(value: number) =>
-                      formatCurrency(Number(value))
-                    }
-                  />
-                  <Legend />
-                  <Bar
-                    dataKey="amount"
-                    name="Egresos"
-                    fill="#ff7043"
-                    radius={[6, 6, 0, 0]}
-                  />
-                </BarChart>
-              </ResponsiveContainer>
-            </Paper>
-          </Grid>
-        </Grid>
-
-        <Grid container spacing={2}>
-          <Grid item xs={12} lg={8}>
-            <Paper
-              sx={{
-                p: 2,
-                height: 420,
                 border: "1px solid rgba(255,255,255,0.08)",
               }}
             >
@@ -633,110 +993,6 @@ export default function ManagerDashboard() {
                 </BarChart>
               </ResponsiveContainer>
             </Paper>
-          </Grid>
-
-          <Grid item xs={12} lg={4}>
-            <Paper
-              sx={{
-                p: 2,
-                height: 420,
-                border: "1px solid rgba(255,255,255,0.08)",
-              }}
-            >
-              <Typography variant="h6" sx={{ mb: 2, fontWeight: 700 }}>
-                Estado del backlog
-              </Typography>
-
-              <ResponsiveContainer width="100%" height="90%">
-                <PieChart>
-                  <Pie
-                    data={backlogStatusData}
-                    dataKey="amount"
-                    nameKey="name"
-                    cx="50%"
-                    cy="50%"
-                    outerRadius={110}
-                    label={({ name, percent }) =>
-                      `${name} ${((percent || 0) * 100).toFixed(0)}%`
-                    }
-                  >
-                    {backlogStatusData.map((_, index) => (
-                      <Cell
-                        key={`backlog-cell-${index}`}
-                        fill={backlogColors[index % backlogColors.length]}
-                      />
-                    ))}
-                  </Pie>
-                  <Tooltip
-                    formatter={(value: number) =>
-                      formatCurrency(Number(value))
-                    }
-                  />
-                  <Legend />
-                </PieChart>
-              </ResponsiveContainer>
-            </Paper>
-          </Grid>
-        </Grid>
-
-        <Grid container spacing={2}>
-          <Grid item xs={12} lg={6}>
-            <InstallmentsTable
-              title="Top 10 cuotas vencidas"
-              rows={data.topOverdueInstallments}
-              showDaysOverdue
-            />
-          </Grid>
-
-          <Grid item xs={12} lg={6}>
-            <InstallmentsTable
-              title="Próximas 10 cuotas a vencer"
-              rows={data.upcomingInstallments}
-            />
-          </Grid>
-        </Grid>
-
-        <Grid container spacing={2}>
-          <Grid item xs={12} sm={6} md={3}>
-            <KpiCard
-              title="Cuotas pendientes"
-              value={String(data.summary.pendingInstallmentsCount || 0)}
-              subtitle={formatCurrency(data.summary.pendingInstallmentsAmount)}
-              icon={<PaymentsIcon />}
-              borderColor="#ffa726"
-            />
-          </Grid>
-
-          <Grid item xs={12} sm={6} md={3}>
-            <KpiCard
-              title="Cuotas vencidas"
-              value={String(data.summary.overdueInstallmentsCount || 0)}
-              subtitle={formatCurrency(data.summary.overdueInstallmentsAmount)}
-              icon={<WarningAmberIcon />}
-              borderColor="#ef5350"
-            />
-          </Grid>
-
-          <Grid item xs={12} sm={6} md={3}>
-            <KpiCard
-              title="Cuotas a vencer"
-              value={String(data.summary.notYetDueInstallmentsCount || 0)}
-              subtitle={formatCurrency(
-                data.summary.notYetDueInstallmentsAmount,
-              )}
-              icon={<EventAvailableIcon />}
-              borderColor="#42a5f5"
-            />
-          </Grid>
-
-          <Grid item xs={12} sm={6} md={3}>
-            <KpiCard
-              title="Series mensuales"
-              value={String((data.monthlySales || []).length)}
-              subtitle="Últimos 12 meses"
-              icon={<TimelineIcon />}
-              borderColor="#7e57c2"
-            />
           </Grid>
         </Grid>
 
@@ -788,42 +1044,35 @@ export default function ManagerDashboard() {
             <Paper
               sx={{
                 p: 2,
-                height: 420,
                 border: "1px solid rgba(255,255,255,0.08)",
+                background:
+                  "linear-gradient(180deg, rgba(24,24,24,0.98) 0%, rgba(15,15,15,0.98) 100%)",
+                height: "100%",
               }}
             >
-              <Typography variant="h6" sx={{ mb: 2, fontWeight: 700 }}>
-                Aging de deuda vencida
-              </Typography>
+              <Stack spacing={2}>
+                <Box>
+                  <Typography variant="h6" sx={{ fontWeight: 700 }}>
+                    Acciones sugeridas
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                    Recomendaciones automáticas para enfocar la gestión.
+                  </Typography>
+                </Box>
 
-              <ResponsiveContainer width="100%" height="90%">
-                <PieChart>
-                  <Pie
-                    data={agingData}
-                    dataKey="amount"
-                    nameKey="bucket"
-                    cx="50%"
-                    cy="50%"
-                    outerRadius={140}
-                    label={({ name, percent }) =>
-                      `${name} ${((percent || 0) * 100).toFixed(0)}%`
-                    }
-                  >
-                    {agingData.map((_, index) => (
-                      <Cell
-                        key={`aging-cell-${index}`}
-                        fill={agingColors[index % agingColors.length]}
+                <Grid container spacing={2}>
+                  {accionesSugeridas.map((accion, idx) => (
+                    <Grid item xs={12} md={4} key={idx}>
+                      <ActionCard
+                        title={accion.title}
+                        description={accion.description}
+                        color={accion.color}
+                        icon={accion.icon}
                       />
-                    ))}
-                  </Pie>
-                  <Tooltip
-                    formatter={(value: number) =>
-                      formatCurrency(Number(value))
-                    }
-                  />
-                  <Legend />
-                </PieChart>
-              </ResponsiveContainer>
+                    </Grid>
+                  ))}
+                </Grid>
+              </Stack>
             </Paper>
           </Grid>
         </Grid>
