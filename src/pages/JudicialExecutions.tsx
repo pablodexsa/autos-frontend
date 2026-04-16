@@ -25,6 +25,7 @@ import {
   InputLabel,
   Select,
   MenuItem,
+  Checkbox,
 } from "@mui/material";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -34,6 +35,7 @@ import {
   searchClients,
   getJudicialExecutionById,
   closeJudicialExecution,
+  getJudicialClientSales,
 } from "../api/judicialExecutions";
 
 const formatCurrency = (value: number) =>
@@ -97,6 +99,10 @@ export default function JudicialExecutions() {
   const [openCreateModal, setOpenCreateModal] = useState(false);
   const [selectedClient, setSelectedClient] = useState<any | null>(null);
   const [clientOptions, setClientOptions] = useState<any[]>([]);
+  const [salesOptions, setSalesOptions] = useState<any[]>([]);
+  const [selectedSaleIds, setSelectedSaleIds] = useState<number[]>([]);
+  const [salesLoading, setSalesLoading] = useState(false);
+  const [previewLoading, setPreviewLoading] = useState(false);
   const [preview, setPreview] = useState<any>(null);
   const [creating, setCreating] = useState(false);
   const [notes, setNotes] = useState("");
@@ -154,8 +160,11 @@ export default function JudicialExecutions() {
   const resetCreateModal = () => {
     setSelectedClient(null);
     setClientOptions([]);
+    setSalesOptions([]);
+    setSelectedSaleIds([]);
     setPreview(null);
     setNotes("");
+    setError("");
   };
 
   const handleOpenCreate = () => {
@@ -182,23 +191,59 @@ export default function JudicialExecutions() {
     }
   };
 
-  const handlePreview = async () => {
-    if (!selectedClient) return;
+  const handleSelectClient = async (client: any | null) => {
+    setSelectedClient(client);
+    setPreview(null);
+    setSalesOptions([]);
+    setSelectedSaleIds([]);
+
+    if (!client?.id) return;
 
     try {
+      setSalesLoading(true);
       setError("");
-      const data = await getJudicialPreview(selectedClient.id);
+      const data = await getJudicialClientSales(client.id);
+      setSalesOptions(Array.isArray(data?.sales) ? data.sales : []);
+    } catch (err: any) {
+      setSalesOptions([]);
+      setError(
+        err?.response?.data?.message ||
+          "Error al obtener los vehículos con deuda del cliente"
+      );
+    } finally {
+      setSalesLoading(false);
+    }
+  };
+
+  const toggleSaleSelection = (saleId: number) => {
+    setSelectedSaleIds((prev) =>
+      prev.includes(saleId)
+        ? prev.filter((id) => id !== saleId)
+        : [...prev, saleId]
+    );
+    setPreview(null);
+  };
+
+  const handlePreview = async () => {
+    if (!selectedClient || !selectedSaleIds.length) return;
+
+    try {
+      setPreviewLoading(true);
+      setError("");
+      const data = await getJudicialPreview(selectedClient.id, selectedSaleIds);
       setPreview(data);
     } catch (err: any) {
       setPreview(null);
       setError(
         err?.response?.data?.message || "Error al obtener el preview judicial"
       );
+    } finally {
+      setPreviewLoading(false);
     }
   };
 
   const handleCreate = async () => {
-    if (!selectedClient) return;
+    if (!selectedClient || !selectedSaleIds.length || !preview) return;
 
     try {
       setCreating(true);
@@ -206,6 +251,7 @@ export default function JudicialExecutions() {
 
       await createJudicialExecution({
         clientId: selectedClient.id,
+        saleIds: selectedSaleIds,
         lawFirmName: "Vazquez Abogados",
         notes: notes.trim() || undefined,
       });
@@ -412,6 +458,7 @@ export default function JudicialExecutions() {
           <Stack spacing={2} sx={{ mt: 1 }}>
             <Autocomplete
               options={clientOptions}
+              value={selectedClient}
               getOptionLabel={(option) => {
                 const name =
                   option.fullName ||
@@ -420,24 +467,92 @@ export default function JudicialExecutions() {
                 return `${name || "Sin nombre"} - ${option.dni || ""}`;
               }}
               onInputChange={(_, value) => handleSearchClients(value)}
-              onChange={(_, value) => setSelectedClient(value)}
+              onChange={(_, value) => handleSelectClient(value)}
               renderInput={(params) => (
                 <TextField {...params} label="Buscar cliente" fullWidth />
               )}
             />
 
+            {selectedClient && (
+              <Typography fontWeight={700}>
+                Cliente seleccionado: {getClientLabel(selectedClient)}
+              </Typography>
+            )}
+
+            {salesLoading ? (
+              <Box sx={{ py: 2, display: "flex", justifyContent: "center" }}>
+                <CircularProgress size={26} />
+              </Box>
+            ) : !!selectedClient && (
+              <Paper sx={{ overflow: "hidden" }}>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell padding="checkbox"></TableCell>
+                      <TableCell>Patente</TableCell>
+                      <TableCell>Vehículo</TableCell>
+                      <TableCell>Fecha venta</TableCell>
+                      <TableCell align="right">Cuotas</TableCell>
+                      <TableCell align="right">Saldo</TableCell>
+                    </TableRow>
+                  </TableHead>
+
+                  <TableBody>
+                    {salesOptions.map((sale: any) => (
+                      <TableRow key={sale.saleId} hover>
+                        <TableCell padding="checkbox">
+                          <Checkbox
+                            checked={selectedSaleIds.includes(sale.saleId)}
+                            onChange={() => toggleSaleSelection(sale.saleId)}
+                          />
+                        </TableCell>
+
+                        <TableCell>{sale.plate || "-"}</TableCell>
+                        <TableCell>{sale.vehicleLabel || "-"}</TableCell>
+                        <TableCell>{formatDate(sale.saleCreatedAt)}</TableCell>
+                        <TableCell align="right">
+                          {sale.installmentsCount ?? 0}
+                        </TableCell>
+                        <TableCell align="right">
+                          {formatCurrency(sale.pendingAmount)}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+
+                    {!salesOptions.length && (
+                      <TableRow>
+                        <TableCell colSpan={6} align="center">
+                          El cliente no tiene vehículos con deuda judicializable
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </Paper>
+            )}
+
             <Button
               variant="outlined"
               onClick={handlePreview}
-              disabled={!selectedClient || creating}
+              disabled={
+                !selectedClient ||
+                !selectedSaleIds.length ||
+                previewLoading ||
+                creating
+              }
             >
-              Ver deuda
+              {previewLoading ? "Consultando..." : "Ver deuda seleccionada"}
             </Button>
 
             {preview && (
               <>
                 <Typography fontWeight={700}>
                   Cliente: {preview.clientName}
+                </Typography>
+
+                <Typography>
+                  Vehículos / operaciones seleccionadas:{" "}
+                  {selectedSaleIds.length}
                 </Typography>
 
                 <Typography>
@@ -461,6 +576,8 @@ export default function JudicialExecutions() {
                   <Table size="small">
                     <TableHead>
                       <TableRow>
+                        <TableCell>Patente</TableCell>
+                        <TableCell>Vehículo</TableCell>
                         <TableCell>Cuota</TableCell>
                         <TableCell>Vencimiento</TableCell>
                         <TableCell align="right">Importe</TableCell>
@@ -472,6 +589,8 @@ export default function JudicialExecutions() {
                     <TableBody>
                       {preview.installments?.map((inst: any) => (
                         <TableRow key={inst.id}>
+                          <TableCell>{inst.plate || "-"}</TableCell>
+                          <TableCell>{inst.vehicleLabel || "-"}</TableCell>
                           <TableCell>{inst.installmentNumber ?? "-"}</TableCell>
                           <TableCell>{formatDate(inst.dueDate)}</TableCell>
                           <TableCell align="right">
@@ -488,7 +607,7 @@ export default function JudicialExecutions() {
 
                       {!preview.installments?.length && (
                         <TableRow>
-                          <TableCell colSpan={5} align="center">
+                          <TableCell colSpan={7} align="center">
                             Sin cuotas para mostrar
                           </TableCell>
                         </TableRow>
@@ -618,36 +737,38 @@ export default function JudicialExecutions() {
 
               <Paper sx={{ overflow: "hidden" }}>
                 <Table size="small">
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>Cuota</TableCell>
-                      <TableCell>Vencimiento</TableCell>
-                      <TableCell align="right">Importe</TableCell>
-                      <TableCell align="right">Saldo actual</TableCell>
-                      <TableCell align="right">Neto judicial</TableCell>
-                    </TableRow>
-                  </TableHead>
+<TableHead>
+  <TableRow>
+    <TableCell>Patente</TableCell>
+    <TableCell>Cuota</TableCell>
+    <TableCell>Vencimiento</TableCell>
+    <TableCell align="right">Importe</TableCell>
+    <TableCell align="right">Saldo actual</TableCell>
+    <TableCell align="right">Neto judicial</TableCell>
+  </TableRow>
+</TableHead>
 
                   <TableBody>
-                    {selectedExecution.installments?.map((inst: any) => (
-                      <TableRow key={inst.id}>
-                        <TableCell>{inst.installmentNumber ?? "-"}</TableCell>
-                        <TableCell>{formatDate(inst.dueDate)}</TableCell>
-                        <TableCell align="right">
-                          {formatCurrency(inst.amount)}
-                        </TableCell>
-                        <TableCell align="right">
-                          {formatCurrency(inst.remainingAmount)}
-                        </TableCell>
-                        <TableCell align="right" sx={{ fontWeight: 700 }}>
-                          {formatCurrency(inst.judicialNetAmount)}
-                        </TableCell>
-                      </TableRow>
-                    ))}
+{selectedExecution.installments?.map((inst: any) => (
+  <TableRow key={inst.id}>
+    <TableCell>{inst.sale?.vehicle?.plate || "-"}</TableCell>
+    <TableCell>{inst.installmentNumber ?? "-"}</TableCell>
+    <TableCell>{formatDate(inst.dueDate)}</TableCell>
+    <TableCell align="right">
+      {formatCurrency(inst.amount)}
+    </TableCell>
+    <TableCell align="right">
+      {formatCurrency(inst.remainingAmount)}
+    </TableCell>
+    <TableCell align="right" sx={{ fontWeight: 700 }}>
+      {formatCurrency(inst.judicialNetAmount)}
+    </TableCell>
+  </TableRow>
+))}
 
                     {!selectedExecution.installments?.length && (
                       <TableRow>
-                        <TableCell colSpan={5} align="center">
+                        <TableCell colSpan={6} align="center">
                           Esta ejecución no tiene cuotas asociadas
                         </TableCell>
                       </TableRow>

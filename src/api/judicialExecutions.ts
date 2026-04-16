@@ -1,15 +1,30 @@
 import api from "./api";
-import { Autocomplete } from "@mui/material";
 
-export async function getJudicialPreview(clientId: number) {
+export async function getJudicialClientSales(clientId: number) {
   const { data } = await api.get(
-    `/judicial-executions/preview/${clientId}`
+    `/judicial-executions/client-sales/${clientId}`
+  );
+  return data;
+}
+
+export async function getJudicialPreview(
+  clientId: number,
+  saleIds: number[]
+) {
+  const { data } = await api.get(
+    `/judicial-executions/preview/${clientId}`,
+    {
+      params: {
+        saleIds: saleIds.join(","),
+      },
+    }
   );
   return data;
 }
 
 export async function createJudicialExecution(payload: {
   clientId: number;
+  saleIds: number[];
   lawFirmName?: string;
   notes?: string;
 }) {

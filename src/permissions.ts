@@ -38,6 +38,7 @@ owner: [
   "sales-list",
   "installment-payments",
   "installments",
+  "judicial-executions",
   "settings",
   "audit",
 ],
@@ -123,5 +124,6 @@ owner: [
     "sales-list",
     "installment-payments",
     "installments",
+    "judicial-executions",
   ],
 };

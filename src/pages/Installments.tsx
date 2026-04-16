@@ -37,7 +37,8 @@ type StatusCode =
   | "PENDING"
   | "OVERDUE"
   | "PARTIAL"
-  | "PARTIAL_OVERDUE";
+  | "PARTIAL_OVERDUE"
+  | "JUDICIALIZED";
 
 type SnackbarSeverity = "success" | "error" | "warning" | "info";
 type PaymentReceiver = "AGENCY" | "STUDIO";
@@ -326,36 +327,42 @@ const calculateCurrentAmountForDate = (
 const selectedInstallment =
   installments.find((x) => x.id === selectedInstallmentId) || null;
 
-  const getStatusCode = (i: any): StatusCode => {
-    if (i.paid) return "PAID";
+  const getStatusCode = (
+  i: any
+): StatusCode | "JUDICIALIZED" => {
+  if (i.isJudicialized) return "JUDICIALIZED";
+  if (i.paid) return "PAID";
 
-    const partial = isPartiallyPaid(i);
-    const overdue = isOverdueRow(i);
+  const partial = isPartiallyPaid(i);
+  const overdue = isOverdueRow(i);
 
-    if (partial && overdue) return "PARTIAL_OVERDUE";
-    if (partial) return "PARTIAL";
-    if (overdue) return "OVERDUE";
+  if (partial && overdue) return "PARTIAL_OVERDUE";
+  if (partial) return "PARTIAL";
+  if (overdue) return "OVERDUE";
 
-    return "PENDING";
-  };
+  return "PENDING";
+};
 
-  const getStatusLabel = (i: any): string => {
-    const code = getStatusCode(i);
-    switch (code) {
-      case "PAID":
-        return "Pagada";
-      case "PENDING":
-        return "Pendiente";
-      case "OVERDUE":
-        return "Vencida";
-      case "PARTIAL":
-        return "Parcial";
-      case "PARTIAL_OVERDUE":
-        return "Parcial + Vencida";
-      default:
-        return "Pendiente";
-    }
-  };
+const getStatusLabel = (i: any): string => {
+  const code = getStatusCode(i);
+
+  switch (code) {
+    case "JUDICIALIZED":
+      return "Judicializada";
+    case "PAID":
+      return "Pagada";
+    case "PENDING":
+      return "Pendiente";
+    case "OVERDUE":
+      return "Vencida";
+    case "PARTIAL":
+      return "Parcial";
+    case "PARTIAL_OVERDUE":
+      return "Parcial + Vencida";
+    default:
+      return "Pendiente";
+  }
+};
 
   const compare = (a: any, b: any) => {
     let av: any;
@@ -625,37 +632,47 @@ const matchesStatus = filters.status
                       )}
                     </TableCell>
                     <TableCell>
-                      {i.paid ? (
-                        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                          <CheckCircle sx={{ color: "#2e7d32" }} />
-                          <Typography
-                            variant="body2"
-                            sx={{ color: "#2e7d32", fontWeight: 600 }}
-                          >
-                            Pagada
-                          </Typography>
-                        </Box>
-                      ) : isPartiallyPaid(i) ? (
-<Button
-  size="small"
-  variant="contained"
-  color="warning"
-  onClick={() => handleOpenPayment(i.id)}
-  disabled={savingPayment}
->
-  Abonar saldo
-</Button>
-                      ) : (
-<Button
-  size="small"
-  variant="contained"
-  color="success"
-  onClick={() => handleOpenPayment(i.id)}
-  disabled={savingPayment}
->
-  Pagar
-</Button>
-                      )}
+{i.isJudicialized ? (
+  <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+    <Typography
+      variant="body2"
+      sx={{ color: "#ed6c02", fontWeight: 600 }}
+    >
+      Judicializada
+    </Typography>
+  </Box>
+) : i.paid ? (
+  <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+    <CheckCircle sx={{ color: "#2e7d32" }} />
+    <Typography
+      variant="body2"
+      sx={{ color: "#2e7d32", fontWeight: 600 }}
+    >
+      Pagada
+    </Typography>
+  </Box>
+) : isPartiallyPaid(i) ? (
+  <Button
+    size="small"
+    variant="contained"
+    color="warning"
+    onClick={() => handleOpenPayment(i.id)}
+    disabled={savingPayment}
+  >
+    Abonar saldo
+  </Button>
+) : (
+  <Button
+    size="small"
+    variant="contained"
+    color="success"
+    onClick={() => handleOpenPayment(i.id)}
+    disabled={savingPayment}
+  >
+    Pagar
+  </Button>
+)}
+
                     </TableCell>
                   </TableRow>
                 );
