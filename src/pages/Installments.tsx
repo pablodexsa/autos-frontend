@@ -52,11 +52,12 @@ const [savingPayment, setSavingPayment] = useState(false);
     null
   );
 
-  const [paymentAmount, setPaymentAmount] = useState<string>("");
-  const [paymentDate, setPaymentDate] = useState<string>("");
-  const [paymentReceiver, setPaymentReceiver] =
-    useState<PaymentReceiver>("AGENCY");
-  const [paymentObservations, setPaymentObservations] = useState<string>("");
+const [paymentAmount, setPaymentAmount] = useState<string>("");
+const [paymentDate, setPaymentDate] = useState<string>("");
+const [paymentCurrentAmount, setPaymentCurrentAmount] = useState<number>(0);
+const [paymentReceiver, setPaymentReceiver] =
+  useState<PaymentReceiver>("AGENCY");
+const [paymentObservations, setPaymentObservations] = useState<string>("");
 
   const [snackbarOpen, setSnackbarOpen] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState("");
@@ -107,21 +108,45 @@ const [savingPayment, setSavingPayment] = useState(false);
     fetchInstallments();
   }, []);
 
+useEffect(() => {
+  if (!selectedInstallment || !paymentDate) return;
+
+  const currentAmount = calculateCurrentAmountForDate(
+    selectedInstallment,
+    paymentDate
+  );
+
+  setPaymentCurrentAmount(currentAmount);
+  setPaymentAmount(String(currentAmount));
+}, [selectedInstallmentId, paymentDate, installments]);
+
   const handleCloseSnackbar = () => setSnackbarOpen(false);
 
-  const handleOpenPayment = (installmentId: number) => {
-    setSelectedInstallmentId(installmentId);
-    setPaymentAmount("");
-    setPaymentDate("");
-    setPaymentReceiver("AGENCY");
-    setPaymentObservations("");
-    setOpenPaymentDialog(true);
-  };
+const handleOpenPayment = (installmentId: number) => {
+  const inst = installments.find((x) => x.id === installmentId);
+  const today = toISODate(new Date());
+  const currentAmount = inst
+    ? calculateCurrentAmountForDate(inst, today)
+    : 0;
 
-  const handleClosePayment = () => {
-    setOpenPaymentDialog(false);
-    setSelectedInstallmentId(null);
-  };
+  setSelectedInstallmentId(installmentId);
+  setPaymentDate(today);
+  setPaymentAmount(String(currentAmount));
+  setPaymentCurrentAmount(currentAmount);
+  setPaymentReceiver("AGENCY");
+  setPaymentObservations("");
+  setOpenPaymentDialog(true);
+};
+
+const handleClosePayment = () => {
+  setOpenPaymentDialog(false);
+  setSelectedInstallmentId(null);
+  setPaymentAmount("");
+  setPaymentDate("");
+  setPaymentCurrentAmount(0);
+  setPaymentReceiver("AGENCY");
+  setPaymentObservations("");
+};
 
   const handleOpenReceipt = async (paymentId: number) => {
     try {
@@ -257,6 +282,37 @@ const handlePaymentSubmit = async () => {
     return s.includes("T") ? s.slice(0, 10) : s.slice(0, 10);
   };
 
+const calculateCurrentAmountForDate = (
+  installment: any,
+  selectedPaymentDate: string
+): number => {
+  const base =
+    installment?.remainingAmount != null
+      ? Number(installment.remainingAmount)
+      : Number(installment.amount ?? 0);
+
+  if (!selectedPaymentDate || !installment?.dueDate || installment?.paid) {
+    return Number(base.toFixed(2));
+  }
+
+  const dueStr = toISODate(installment.dueDate);
+  const payStr = toISODate(selectedPaymentDate);
+
+  if (!dueStr || !payStr || payStr <= dueStr) {
+    return Number(base.toFixed(2));
+  }
+
+  const dueDate = new Date(`${dueStr}T00:00:00`);
+  const payDate = new Date(`${payStr}T00:00:00`);
+
+  const diffMs = payDate.getTime() - dueDate.getTime();
+  const daysLate = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+  if (daysLate <= 0) return Number(base.toFixed(2));
+
+  return Number((base * (1 + 0.01 * daysLate)).toFixed(2));
+};
+
   const isOverdueRow = (i: any) => {
     if (i.paid) return false;
     if (!i.dueDate) return false;
@@ -266,6 +322,9 @@ const handlePaymentSubmit = async () => {
 
     return !!dueStr && dueStr < todayStr;
   };
+
+const selectedInstallment =
+  installments.find((x) => x.id === selectedInstallmentId) || null;
 
   const getStatusCode = (i: any): StatusCode => {
     if (i.paid) return "PAID";
@@ -640,16 +699,37 @@ const matchesStatus = filters.status
         fullWidth
       >
         <DialogTitle>Registrar pago</DialogTitle>
-        <DialogContent>
-          <Box sx={{ display: "flex", flexDirection: "column", gap: 2, mt: 1 }}>
-            <TextField
-              label="Monto"
-              type="number"
-              value={paymentAmount}
-              onChange={(e) => setPaymentAmount(e.target.value)}
-              fullWidth
-              disabled={savingPayment}
-            />
+<DialogContent>
+  <Box sx={{ display: "flex", flexDirection: "column", gap: 2, mt: 1 }}>
+    {selectedInstallment && (
+      <Box>
+        <Typography variant="body2" sx={{ color: "#fff" }}>
+          Saldo pendiente: $
+          {Number(
+            selectedInstallment.remainingAmount ??
+              selectedInstallment.amount ??
+              0
+          ).toLocaleString()}
+        </Typography>
+
+        <Typography
+          variant="body2"
+          sx={{ color: "#fff", fontWeight: 700, mt: 0.5 }}
+        >
+          Valor actual al día seleccionado: $
+          {paymentCurrentAmount.toLocaleString()}
+        </Typography>
+      </Box>
+    )}
+
+    <TextField
+      label="Monto"
+      type="number"
+      value={paymentAmount}
+      onChange={(e) => setPaymentAmount(e.target.value)}
+      fullWidth
+      disabled={savingPayment}
+    />
 
             <TextField
               label="Fecha de pago"

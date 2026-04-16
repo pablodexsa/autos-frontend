@@ -62,8 +62,9 @@ const Sidebar: React.FC<SidebarProps> = ({ mobileOpen = false, handleDrawerToggl
 
     { text: "Ventas", icon: <AttachMoneyIcon />, path: "/sales", key: "sales" },
     { text: "Listado de Ventas", icon: <ListAltIcon />, path: "/sales/list", key: "sales-list" },
-    { text: "Cuotas", icon: <ListAltIcon />, path: "/installments", key: "installments" },
-    { text: "Pago de Cuotas", icon: <PaymentsIcon />, path: "/installment-payments", key: "installment-payments" },
+    { text: "Cuotas Devengadas", icon: <ListAltIcon />, path: "/installments", key: "installments" },
+    { text: "Cuotas Pagas", icon: <PaymentsIcon />, path: "/installment-payments", key: "installment-payments" },
+    { text: "Ejecuciones Judiciales", icon: <PaidIcon />, path: "/judicial-executions", key: "judicial-executions" },
     { text: "Configuración", icon: <SettingsIcon />, path: "/settings", key: "settings" },
     { text: "Auditoría del Sistema", icon: <ListAltIcon />, path: "/audit", key: "audit" },
     { text: "Usuarios", icon: <PersonIcon />, path: "/users", key: "users" },

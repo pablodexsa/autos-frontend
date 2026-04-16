@@ -15,6 +15,7 @@
     "sales-list",
     "installment-payments",
     "installments",
+    "judicial-executions",
     "settings",
     "users",
     "roles",

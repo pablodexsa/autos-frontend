@@ -13,6 +13,9 @@ export interface ManagerDashboardSummary {
   notYetDueInstallmentsCount: number;
   notYetDueInstallmentsAmount: number;
   receivablesBacklogAmount: number;
+judicialInstallmentsCount: number;
+judicialClientsCount: number;
+judicialAmount: number;
 }
 
 export interface DashboardMonthlySeries {

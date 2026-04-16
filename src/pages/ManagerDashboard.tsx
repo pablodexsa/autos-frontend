@@ -469,6 +469,9 @@ const totalMesSiguiente = data?.summary.nextMonthInstallmentsAmount || 0;
   const backlogVencido = data?.summary.overdueInstallmentsAmount || 0;
   const backlogAVencer = data?.summary.notYetDueInstallmentsAmount || 0;
   const resultadoNetoMes = data?.summary.monthlyNetAmount || 0;
+const judicialAmount = data?.summary.judicialAmount || 0;
+const judicialCount = data?.summary.judicialInstallmentsCount || 0;
+const judicialClients = data?.summary.judicialClientsCount || 0;
 
   const porcentajeCobranzaMes =
     totalMesActual > 0 ? cobranzasMes / totalMesActual : 0;
@@ -522,6 +525,18 @@ const totalMesSiguiente = data?.summary.nextMonthInstallmentsAmount || 0;
           icon: <CheckCircleOutlineIcon fontSize="small" />,
           text: "La mayor parte del backlog todavía no está vencida.",
         },
+
+  judicialAmount > 0
+    ? {
+        severity: "warning" as const,
+        icon: <WarningAmberIcon fontSize="small" />,
+        text: `Hay ${formatCurrency(judicialAmount)} en ejecución judicial.`,
+      }
+    : {
+        severity: "success" as const,
+        icon: <CheckCircleOutlineIcon fontSize="small" />,
+        text: "No hay deuda en ejecución judicial.",
+      },
   ];
 
   const accionesSugeridas = [
@@ -714,6 +729,18 @@ const totalMesSiguiente = data?.summary.nextMonthInstallmentsAmount || 0;
               valueColor={cobranzaColor}
             />
           </Grid>
+
+<Grid item xs={12} sm={6} lg={3}>
+  <KpiCard
+    title="Ejecución judicial"
+    value={formatCurrency(judicialAmount)}
+    subtitle={`${judicialCount} cuotas · ${judicialClients} clientes`}
+    icon={<WarningAmberIcon />}
+    borderColor="#ef5350"
+    valueColor="#ef5350"
+  />
+</Grid>
+
         </Grid>
 
         <Grid container spacing={2}>

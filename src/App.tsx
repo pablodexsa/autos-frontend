@@ -33,6 +33,7 @@ import Refunds from "./pages/Refunds";
 import DirectoLeads from "./pages/DirectoLeads";
 import ManagerDashboard from "./pages/ManagerDashboard";
 import CuotaRedLeads from "./pages/CuotaRedLeads";
+import JudicialExecutions from "./pages/JudicialExecutions";
 
 // Assets & global
 import theme from "./theme";
@@ -172,6 +173,15 @@ const App = () => {
                       </ProtectedRoute>
                     }
                   />
+
+<Route
+  path="/judicial-executions"
+  element={
+    <ProtectedRoute permissionKey="judicial-executions">
+      <JudicialExecutions />
+    </ProtectedRoute>
+  }
+/>
 
                   <Route
                     path="/vehicles"
