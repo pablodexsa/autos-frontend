@@ -50,7 +50,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import * as XLSX from "xlsx";
+import * as XLSX from "xlsx-js-style";
 import { getManagerDashboard } from "../api/dashboard";
 import {
   DashboardInstallmentItem,
@@ -160,6 +160,20 @@ function getStatusChipProps(status?: string | null) {
   };
 }
 
+const currencyColumns = new Set([
+  "Importe",
+  "Monto",
+  "Saldo",
+  "Ingresos",
+  "Egresos",
+  "Resultado neto",
+  "Monto total",
+  "Pagado",
+  "Pendiente",
+]);
+
+const percentColumns = new Set(["% cobranza del mes", "% vencido sobre backlog"]);
+
 function autoFitColumns(rows: Record<string, any>[]) {
   const safeRows = rows.length ? rows : [{ Detalle: "Sin datos" }];
   const headers = Object.keys(safeRows[0] || {});
@@ -169,7 +183,7 @@ function autoFitColumns(rows: Record<string, any>[]) {
       Math.max(
         key.length,
         ...safeRows.map((row) => String(row[key] ?? "").length)
-      ) + 2,
+      ) + 4,
   }));
 }
 
@@ -188,18 +202,92 @@ function createCorporateSheet(title: string, rows: Record<string, any>[]) {
     skipHeader: false,
   });
 
+  const range = XLSX.utils.decode_range(worksheet["!ref"] || "A1:A1");
+  const headerRowIndex = 4;
+
   worksheet["!cols"] = autoFitColumns(safeRows);
+  worksheet["!autofilter"] = {
+    ref: XLSX.utils.encode_range({
+      s: { r: headerRowIndex, c: range.s.c },
+      e: { r: range.e.r, c: range.e.c },
+    }),
+  };
+  worksheet["!freeze"] = { xSplit: 0, ySplit: 5 };
 
   if (worksheet["A1"]) {
     worksheet["A1"].s = {
-      font: { bold: true, sz: 18 },
+      font: { bold: true, sz: 18, color: { rgb: "FFFFFF" } },
+      fill: { fgColor: { rgb: "1F1F1F" } },
+      alignment: { horizontal: "center" },
     };
   }
 
   if (worksheet["A2"]) {
     worksheet["A2"].s = {
-      font: { bold: true, sz: 14 },
+      font: { bold: true, sz: 14, color: { rgb: "1F1F1F" } },
     };
+  }
+
+  worksheet["!merges"] = [
+    {
+      s: { r: 0, c: 0 },
+      e: { r: 0, c: Math.max(range.e.c, 1) },
+    },
+  ];
+
+  for (let C = range.s.c; C <= range.e.c; C++) {
+    const headerCellAddress = XLSX.utils.encode_cell({
+      r: headerRowIndex,
+      c: C,
+    });
+    const headerCell = worksheet[headerCellAddress];
+    const headerName = String(headerCell?.v || "");
+
+    if (headerCell) {
+      headerCell.s = {
+        font: { bold: true, color: { rgb: "000000" } },
+        fill: { fgColor: { rgb: "D9D9D9" } },
+        alignment: { horizontal: "center", vertical: "center" },
+        border: {
+          top: { style: "thin", color: { rgb: "BFBFBF" } },
+          bottom: { style: "thin", color: { rgb: "BFBFBF" } },
+          left: { style: "thin", color: { rgb: "BFBFBF" } },
+          right: { style: "thin", color: { rgb: "BFBFBF" } },
+        },
+      };
+    }
+
+    for (let R = headerRowIndex + 1; R <= range.e.r; R++) {
+      const cellAddress = XLSX.utils.encode_cell({ r: R, c: C });
+      const cell = worksheet[cellAddress];
+
+      if (!cell) continue;
+
+      cell.s = {
+        border: {
+          top: { style: "thin", color: { rgb: "E7E6E6" } },
+          bottom: { style: "thin", color: { rgb: "E7E6E6" } },
+          left: { style: "thin", color: { rgb: "E7E6E6" } },
+          right: { style: "thin", color: { rgb: "E7E6E6" } },
+        },
+      };
+
+      if (typeof cell.v === "number" && currencyColumns.has(headerName)) {
+        cell.z = '"$"#,##0';
+        cell.s = {
+          ...cell.s,
+          alignment: { horizontal: "right" },
+        };
+      }
+
+      if (typeof cell.v === "number" && percentColumns.has(headerName)) {
+        cell.z = "0%";
+        cell.s = {
+          ...cell.s,
+          alignment: { horizontal: "right" },
+        };
+      }
+    }
   }
 
   return worksheet;
@@ -565,11 +653,11 @@ export default function ManagerDashboard() {
       { Concepto: "Clientes en ejecución judicial", Importe: judicialClients },
       {
         Concepto: "% cobranza del mes",
-        Importe: `${(porcentajeCobranzaMes * 100).toFixed(0)}%`,
+        Importe: porcentajeCobranzaMes,
       },
       {
         Concepto: "% vencido sobre backlog",
-        Importe: `${(proporcionVencido * 100).toFixed(0)}%`,
+        Importe: proporcionVencido,
       },
     ];
 
