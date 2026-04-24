@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import {
   Alert,
   Box,
+  Button,
   Card,
   CardContent,
   CircularProgress,
@@ -36,6 +37,7 @@ import InsightsIcon from "@mui/icons-material/Insights";
 import AssignmentTurnedInIcon from "@mui/icons-material/AssignmentTurnedIn";
 import PriorityHighIcon from "@mui/icons-material/PriorityHigh";
 import AutorenewIcon from "@mui/icons-material/Autorenew";
+import DownloadIcon from "@mui/icons-material/Download";
 import {
   Bar,
   BarChart,
@@ -48,6 +50,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import * as XLSX from "xlsx";
 import { getManagerDashboard } from "../api/dashboard";
 import {
   DashboardInstallmentItem,
@@ -125,10 +128,7 @@ function getStatusChipProps(status?: string | null) {
     };
   }
 
-  if (
-    normalized.includes("PENDIENTE") ||
-    normalized.includes("PARCIAL")
-  ) {
+  if (normalized.includes("PENDIENTE") || normalized.includes("PARCIAL")) {
     return {
       label: status || "Pendiente",
       sx: {
@@ -158,6 +158,51 @@ function getStatusChipProps(status?: string | null) {
       fontWeight: 700,
     },
   };
+}
+
+function autoFitColumns(rows: Record<string, any>[]) {
+  const safeRows = rows.length ? rows : [{ Detalle: "Sin datos" }];
+  const headers = Object.keys(safeRows[0] || {});
+
+  return headers.map((key) => ({
+    wch:
+      Math.max(
+        key.length,
+        ...safeRows.map((row) => String(row[key] ?? "").length)
+      ) + 2,
+  }));
+}
+
+function createCorporateSheet(title: string, rows: Record<string, any>[]) {
+  const safeRows = rows.length ? rows : [{ Detalle: "Sin datos" }];
+
+  const worksheet = XLSX.utils.aoa_to_sheet([
+    ["GL Motors"],
+    [title],
+    [`Generado: ${new Date().toLocaleString("es-AR")}`],
+    [],
+  ]);
+
+  XLSX.utils.sheet_add_json(worksheet, safeRows, {
+    origin: "A5",
+    skipHeader: false,
+  });
+
+  worksheet["!cols"] = autoFitColumns(safeRows);
+
+  if (worksheet["A1"]) {
+    worksheet["A1"].s = {
+      font: { bold: true, sz: 18 },
+    };
+  }
+
+  if (worksheet["A2"]) {
+    worksheet["A2"].s = {
+      font: { bold: true, sz: 14 },
+    };
+  }
+
+  return worksheet;
 }
 
 type KpiCardProps = {
@@ -307,7 +352,9 @@ function InstallmentsTable({
                 <TableRow key={row.id} hover>
                   <TableCell>{row.installmentNumber ?? "-"}</TableCell>
                   <TableCell>{formatDate(row.dueDate)}</TableCell>
-                  <TableCell align="right">{formatCurrency(row.amount)}</TableCell>
+                  <TableCell align="right">
+                    {formatCurrency(row.amount)}
+                  </TableCell>
                   <TableCell align="right">
                     {formatCurrency(row.remainingAmount)}
                   </TableCell>
@@ -461,17 +508,17 @@ export default function ManagerDashboard() {
     nextMonthDate.getMonth() + 1
   ).padStart(2, "0")}`;
 
-const totalMesActual = data?.summary.currentMonthInstallmentsAmount || 0;
-const totalMesSiguiente = data?.summary.nextMonthInstallmentsAmount || 0;
+  const totalMesActual = data?.summary.currentMonthInstallmentsAmount || 0;
+  const totalMesSiguiente = data?.summary.nextMonthInstallmentsAmount || 0;
 
   const cobranzasMes = data?.summary.monthlyCollectedInstallmentsAmount || 0;
   const backlogTotal = data?.summary.receivablesBacklogAmount || 0;
   const backlogVencido = data?.summary.overdueInstallmentsAmount || 0;
   const backlogAVencer = data?.summary.notYetDueInstallmentsAmount || 0;
   const resultadoNetoMes = data?.summary.monthlyNetAmount || 0;
-const judicialAmount = data?.summary.judicialAmount || 0;
-const judicialCount = data?.summary.judicialInstallmentsCount || 0;
-const judicialClients = data?.summary.judicialClientsCount || 0;
+  const judicialAmount = data?.summary.judicialAmount || 0;
+  const judicialCount = data?.summary.judicialInstallmentsCount || 0;
+  const judicialClients = data?.summary.judicialClientsCount || 0;
 
   const porcentajeCobranzaMes =
     totalMesActual > 0 ? cobranzasMes / totalMesActual : 0;
@@ -484,29 +531,166 @@ const judicialClients = data?.summary.judicialClientsCount || 0;
   const riesgoMoraColor = getDebtRiskColor(proporcionVencido);
   const netColor = getNetColor(resultadoNetoMes);
 
+  function handleExportExcel() {
+    if (!data) return;
+
+    const workbook = XLSX.utils.book_new();
+
+    const resumen = [
+      { Concepto: "Total a ingresar mes actual", Importe: totalMesActual },
+      { Concepto: "Total a ingresar mes siguiente", Importe: totalMesSiguiente },
+      { Concepto: "Pagos del mes", Importe: cobranzasMes },
+      {
+        Concepto: "Cantidad de cuotas cobradas del mes",
+        Importe: data.summary.monthlyCollectedInstallmentsCount || 0,
+      },
+      { Concepto: "Total cuotas pendientes", Importe: backlogTotal },
+      {
+        Concepto: "Cantidad de cuotas pendientes",
+        Importe: data.summary.pendingInstallmentsCount || 0,
+      },
+      { Concepto: "Backlog vencido", Importe: backlogVencido },
+      {
+        Concepto: "Cantidad de cuotas vencidas",
+        Importe: data.summary.overdueInstallmentsCount || 0,
+      },
+      { Concepto: "Backlog a vencer", Importe: backlogAVencer },
+      {
+        Concepto: "Cantidad de cuotas a vencer",
+        Importe: data.summary.notYetDueInstallmentsCount || 0,
+      },
+      { Concepto: "Resultado neto mes", Importe: resultadoNetoMes },
+      { Concepto: "Ejecución judicial", Importe: judicialAmount },
+      { Concepto: "Cuotas en ejecución judicial", Importe: judicialCount },
+      { Concepto: "Clientes en ejecución judicial", Importe: judicialClients },
+      {
+        Concepto: "% cobranza del mes",
+        Importe: `${(porcentajeCobranzaMes * 100).toFixed(0)}%`,
+      },
+      {
+        Concepto: "% vencido sobre backlog",
+        Importe: `${(proporcionVencido * 100).toFixed(0)}%`,
+      },
+    ];
+
+    const topVencidas = (data.topOverdueInstallments || []).map((row) => ({
+      ID: row.id,
+      Cuota: row.installmentNumber ?? "-",
+      Vencimiento: formatDate(row.dueDate),
+      Monto: row.amount || 0,
+      Saldo: row.remainingAmount || 0,
+      "Días atraso": row.daysOverdue ?? 0,
+      Estado: row.status || "-",
+    }));
+
+    const proximas = (data.upcomingInstallments || []).map((row) => ({
+      ID: row.id,
+      Cuota: row.installmentNumber ?? "-",
+      Vencimiento: formatDate(row.dueDate),
+      Monto: row.amount || 0,
+      Saldo: row.remainingAmount || 0,
+      Estado: row.status || "-",
+    }));
+
+    const flujoMensual = (data.monthlyCashflow || []).map((row) => ({
+      Mes: formatMonth(row.month),
+      Ingresos: row.income || 0,
+      Egresos: row.expenses || 0,
+      "Resultado neto": row.net || 0,
+    }));
+
+    const ventasMensuales = (data.monthlySales || []).map((row) => ({
+      Mes: formatMonth(row.month),
+      Cantidad: row.count || 0,
+      Importe: row.amount || 0,
+    }));
+
+    const cuotasPorMes = (data.installmentsByDueMonth || []).map((row) => ({
+      Mes: formatMonth(row.month),
+      "Monto total": row.dueAmount || 0,
+      Pagado: row.paidAmount || 0,
+      Pendiente: row.pendingAmount || 0,
+      "Cuotas pagadas": row.paidCount || 0,
+      "Cuotas impagas": row.unpaidCount || 0,
+    }));
+
+    const aging = (data.receivablesAging || []).map((row) => ({
+      Rango: `${row.bucket} días`,
+      Cantidad: row.count || 0,
+      Importe: row.amount || 0,
+    }));
+
+    XLSX.utils.book_append_sheet(
+      workbook,
+      createCorporateSheet("Resumen ejecutivo", resumen),
+      "Resumen"
+    );
+
+    XLSX.utils.book_append_sheet(
+      workbook,
+      createCorporateSheet("Top cuotas vencidas", topVencidas),
+      "Cuotas vencidas"
+    );
+
+    XLSX.utils.book_append_sheet(
+      workbook,
+      createCorporateSheet("Próximas cuotas a vencer", proximas),
+      "Proximas cuotas"
+    );
+
+    XLSX.utils.book_append_sheet(
+      workbook,
+      createCorporateSheet("Flujo mensual", flujoMensual),
+      "Flujo mensual"
+    );
+
+    XLSX.utils.book_append_sheet(
+      workbook,
+      createCorporateSheet("Ventas mensuales", ventasMensuales),
+      "Ventas"
+    );
+
+    XLSX.utils.book_append_sheet(
+      workbook,
+      createCorporateSheet("Cuotas por mes de vencimiento", cuotasPorMes),
+      "Cuotas por mes"
+    );
+
+    XLSX.utils.book_append_sheet(
+      workbook,
+      createCorporateSheet("Aging de deuda vencida", aging),
+      "Aging"
+    );
+
+    XLSX.writeFile(
+      workbook,
+      `GL-Motors-dashboard-${new Date().toISOString().slice(0, 10)}.xlsx`
+    );
+  }
+
   const alertasEjecutivas = [
     porcentajeCobranzaMes < 0.6
       ? {
           severity: "error" as const,
           icon: <ErrorOutlineIcon fontSize="small" />,
-          text: `La cobranza del mes está en ${(porcentajeCobranzaMes * 100).toFixed(
-            0
-          )}% del objetivo.`,
+          text: `La cobranza del mes está en ${(
+            porcentajeCobranzaMes * 100
+          ).toFixed(0)}% del objetivo.`,
         }
       : porcentajeCobranzaMes < 0.85
       ? {
           severity: "warning" as const,
           icon: <InfoOutlinedIcon fontSize="small" />,
-          text: `La cobranza del mes está en ${(porcentajeCobranzaMes * 100).toFixed(
-            0
-          )}%. Conviene seguirla de cerca.`,
+          text: `La cobranza del mes está en ${(
+            porcentajeCobranzaMes * 100
+          ).toFixed(0)}%. Conviene seguirla de cerca.`,
         }
       : {
           severity: "success" as const,
           icon: <CheckCircleOutlineIcon fontSize="small" />,
-          text: `La cobranza del mes está saludable: ${(porcentajeCobranzaMes * 100).toFixed(
-            0
-          )}% del objetivo.`,
+          text: `La cobranza del mes está saludable: ${(
+            porcentajeCobranzaMes * 100
+          ).toFixed(0)}% del objetivo.`,
         },
     proporcionVencido >= 0.5
       ? {
@@ -525,18 +709,17 @@ const judicialClients = data?.summary.judicialClientsCount || 0;
           icon: <CheckCircleOutlineIcon fontSize="small" />,
           text: "La mayor parte del backlog todavía no está vencida.",
         },
-
-  judicialAmount > 0
-    ? {
-        severity: "warning" as const,
-        icon: <WarningAmberIcon fontSize="small" />,
-        text: `Hay ${formatCurrency(judicialAmount)} en ejecución judicial.`,
-      }
-    : {
-        severity: "success" as const,
-        icon: <CheckCircleOutlineIcon fontSize="small" />,
-        text: "No hay deuda en ejecución judicial.",
-      },
+    judicialAmount > 0
+      ? {
+          severity: "warning" as const,
+          icon: <WarningAmberIcon fontSize="small" />,
+          text: `Hay ${formatCurrency(judicialAmount)} en ejecución judicial.`,
+        }
+      : {
+          severity: "success" as const,
+          icon: <CheckCircleOutlineIcon fontSize="small" />,
+          text: "No hay deuda en ejecución judicial.",
+        },
   ];
 
   const accionesSugeridas = [
@@ -566,9 +749,7 @@ const judicialClients = data?.summary.judicialClientsCount || 0;
       title: "Medir cierre del mes",
       description:
         totalMesActual > 0
-          ? `Hoy se cobraron ${formatCurrency(
-              cobranzasMes
-            )} sobre ${formatCurrency(
+          ? `Hoy se cobraron ${formatCurrency(cobranzasMes)} sobre ${formatCurrency(
               totalMesActual
             )} previstos para el mes actual.`
           : "No hay previsión cargada para el mes actual.",
@@ -605,12 +786,31 @@ const judicialClients = data?.summary.judicialClientsCount || 0;
     <Box sx={{ p: { xs: 2, md: 3 } }}>
       <Stack spacing={3}>
         <Box>
-          <Typography variant="h4" sx={{ fontWeight: 800 }}>
-            Dashboard Gerencial
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-            Resumen financiero y de cobranzas con foco ejecutivo.
-          </Typography>
+          <Stack
+            direction={{ xs: "column", sm: "row" }}
+            justifyContent="space-between"
+            alignItems={{ xs: "flex-start", sm: "center" }}
+            spacing={2}
+          >
+            <Box>
+              <Typography variant="h4" sx={{ fontWeight: 800 }}>
+                Dashboard Gerencial
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                Resumen financiero y de cobranzas con foco ejecutivo.
+              </Typography>
+            </Box>
+
+            <Button
+              variant="contained"
+              startIcon={<DownloadIcon />}
+              onClick={handleExportExcel}
+              disabled={!data}
+              sx={{ fontWeight: 700 }}
+            >
+              Exportar Excel
+            </Button>
+          </Stack>
         </Box>
 
         <Paper
@@ -730,17 +930,16 @@ const judicialClients = data?.summary.judicialClientsCount || 0;
             />
           </Grid>
 
-<Grid item xs={12} sm={6} lg={3}>
-  <KpiCard
-    title="Ejecución judicial"
-    value={formatCurrency(judicialAmount)}
-    subtitle={`${judicialCount} cuotas · ${judicialClients} clientes`}
-    icon={<WarningAmberIcon />}
-    borderColor="#ef5350"
-    valueColor="#ef5350"
-  />
-</Grid>
-
+          <Grid item xs={12} sm={6} lg={3}>
+            <KpiCard
+              title="Ejecución judicial"
+              value={formatCurrency(judicialAmount)}
+              subtitle={`${judicialCount} cuotas · ${judicialClients} clientes`}
+              icon={<WarningAmberIcon />}
+              borderColor="#ef5350"
+              valueColor="#ef5350"
+            />
+          </Grid>
         </Grid>
 
         <Grid container spacing={2}>
@@ -825,7 +1024,9 @@ const judicialClients = data?.summary.judicialClientsCount || 0;
                   }}
                 />
                 <Chip
-                  label={`Vencido ${(proporcionVencido * 100).toFixed(0)}% del backlog`}
+                  label={`Vencido ${(proporcionVencido * 100).toFixed(
+                    0
+                  )}% del backlog`}
                   sx={{
                     backgroundColor: `${riesgoMoraColor}22`,
                     color: riesgoMoraColor,
@@ -833,7 +1034,9 @@ const judicialClients = data?.summary.judicialClientsCount || 0;
                   }}
                 />
                 <Chip
-                  label={`Resultado ${resultadoNetoMes >= 0 ? "positivo" : "negativo"}`}
+                  label={`Resultado ${
+                    resultadoNetoMes >= 0 ? "positivo" : "negativo"
+                  }`}
                   sx={{
                     backgroundColor: `${netColor}22`,
                     color: netColor,
@@ -889,9 +1092,7 @@ const judicialClients = data?.summary.judicialClientsCount || 0;
             <KpiCard
               title="Cuotas a vencer"
               value={String(data.summary.notYetDueInstallmentsCount || 0)}
-              subtitle={formatCurrency(
-                data.summary.notYetDueInstallmentsAmount
-              )}
+              subtitle={formatCurrency(data.summary.notYetDueInstallmentsAmount)}
               icon={<EventAvailableIcon />}
               borderColor="#42a5f5"
               valueColor="#42a5f5"
@@ -930,14 +1131,8 @@ const judicialClients = data?.summary.judicialClientsCount || 0;
                     stroke="rgba(255,255,255,0.08)"
                   />
                   <XAxis dataKey="label" />
-                  <YAxis
-                    tickFormatter={(value) => `${Math.round(value / 1000)}k`}
-                  />
-                  <Tooltip
-                    formatter={(value: number) =>
-                      formatCurrency(Number(value))
-                    }
-                  />
+                  <YAxis tickFormatter={(value) => `${Math.round(value / 1000)}k`} />
+                  <Tooltip formatter={(value: number) => formatCurrency(Number(value))} />
                   <Legend />
                   <Bar
                     dataKey="income"
@@ -983,14 +1178,8 @@ const judicialClients = data?.summary.judicialClientsCount || 0;
                     stroke="rgba(255,255,255,0.08)"
                   />
                   <XAxis dataKey="label" />
-                  <YAxis
-                    tickFormatter={(value) => `${Math.round(value / 1000)}k`}
-                  />
-                  <Tooltip
-                    formatter={(value: number) =>
-                      formatCurrency(Number(value))
-                    }
-                  />
+                  <YAxis tickFormatter={(value) => `${Math.round(value / 1000)}k`} />
+                  <Tooltip formatter={(value: number) => formatCurrency(Number(value))} />
                   <Legend />
                   <Bar
                     dataKey="paidAmount"
@@ -1041,9 +1230,7 @@ const judicialClients = data?.summary.judicialClientsCount || 0;
                         borderBottom: "1px solid rgba(255,255,255,0.06)",
                       }}
                     >
-                      <Typography variant="body2">
-                        {item.bucket} días
-                      </Typography>
+                      <Typography variant="body2">{item.bucket} días</Typography>
                       <Typography variant="body2" fontWeight={700}>
                         {formatCurrency(item.amount)}
                       </Typography>
