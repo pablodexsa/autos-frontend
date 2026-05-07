@@ -241,13 +241,14 @@ const handlePaymentSubmit = async () => {
     return Number(i.remainingAmount ?? i.amount ?? 0);
   };
 
-  const getPaidAmount = (i: any) => {
-    const original = getOriginalAmount(i);
-    const remainingRaw = i.remainingAmount;
-    const remaining = remainingRaw != null ? Number(remainingRaw) : original;
+const getPaidAmount = (i: any) => {
+  if (!Array.isArray(i.payments)) return 0;
 
-    return Math.max(original - remaining, 0);
-  };
+  return i.payments.reduce(
+    (sum: number, p: any) => sum + Number(p.amount || 0),
+    0
+  );
+};
 
   const isPartiallyPaid = (i: any) => {
     if (i.paid) return false;
@@ -296,17 +297,22 @@ const calculateCurrentAmountForDate = (
     return Number(base.toFixed(2));
   }
 
-  const dueStr = toISODate(installment.dueDate);
-  const payStr = toISODate(selectedPaymentDate);
+const startStr =
+  installment?.status === "PARTIALLY_PAID" && installment?.lastPaymentAt
+    ? toISODate(installment.lastPaymentAt)
+    : toISODate(installment.dueDate);
 
-  if (!dueStr || !payStr || payStr <= dueStr) {
-    return Number(base.toFixed(2));
-  }
+const payStr = toISODate(selectedPaymentDate);
 
-  const dueDate = new Date(`${dueStr}T00:00:00`);
-  const payDate = new Date(`${payStr}T00:00:00`);
+if (!startStr || !payStr || payStr <= startStr) {
+  return Number(base.toFixed(2));
+}
 
-  const diffMs = payDate.getTime() - dueDate.getTime();
+const startDate = new Date(`${startStr}T00:00:00`);
+const payDate = new Date(`${payStr}T00:00:00`);
+
+const diffMs = payDate.getTime() - startDate.getTime();
+
   const daysLate = Math.floor(diffMs / (1000 * 60 * 60 * 24));
 
   if (daysLate <= 0) return Number(base.toFixed(2));
