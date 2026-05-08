@@ -52,6 +52,7 @@ import {
 } from "recharts";
 import * as XLSX from "xlsx-js-style";
 import { getManagerDashboard } from "../api/dashboard";
+import api from "../api/api";
 import {
   DashboardInstallmentItem,
   ManagerDashboardResponse,
@@ -170,6 +171,9 @@ const currencyColumns = new Set([
   "Monto total",
   "Pagado",
   "Pendiente",
+  "Valor cuota",
+  "Total pagado",
+  "Total pendiente",
 ]);
 
 const percentColumns = new Set(["% cobranza del mes", "% vencido sobre backlog"]);
@@ -756,6 +760,143 @@ export default function ManagerDashboard() {
     );
   }
 
+  async function handleExportClientDebtExcel() {
+    try {
+      setError("");
+
+      const response = await api.get("/installments", {
+        params: {
+          includePaid: true,
+          limit: 10000,
+          pageSize: 10000,
+        },
+      });
+
+      const installments = Array.isArray(response.data)
+        ? response.data
+        : response.data?.data || response.data?.items || [];
+
+      const grouped = new Map<
+        string,
+        {
+          clientName: string;
+          totalInstallments: number;
+          paidCount: number;
+          pendingCount: number;
+          installmentValue: number;
+          totalPaid: number;
+          totalPending: number;
+        }
+      >();
+
+      installments.forEach((inst: any) => {
+        const status = normalizeStatus(inst.status);
+
+        const isOverdue =
+          status.includes("OVERDUE") ||
+          status.includes("VENCIDA") ||
+          status.includes("VENCIDO");
+
+        if (isOverdue) return;
+
+        const clientId =
+          inst.client?.id ||
+          inst.clientId ||
+          inst.sale?.client?.id ||
+          inst.sale?.clientId ||
+          inst.id;
+
+        const clientName =
+          inst.client?.fullName ||
+          inst.client?.name ||
+          inst.clientName ||
+          inst.sale?.client?.fullName ||
+          inst.sale?.client?.name ||
+          "Sin cliente";
+
+        const totalInstallments = Number(inst.totalInstallments || 0);
+        const amount = Number(inst.amount || 0);
+        const paid = Number(inst.paid || 0);
+        const remainingAmount = Number(inst.remainingAmount || 0);
+
+        if (!grouped.has(String(clientId))) {
+          grouped.set(String(clientId), {
+            clientName,
+            totalInstallments,
+            paidCount: 0,
+            pendingCount: 0,
+            installmentValue: amount,
+            totalPaid: 0,
+            totalPending: 0,
+          });
+        }
+
+        const group = grouped.get(String(clientId))!;
+
+        group.totalInstallments = Math.max(
+          group.totalInstallments,
+          totalInstallments
+        );
+
+        if (!group.installmentValue && amount) {
+          group.installmentValue = amount;
+        }
+
+        const isPaid =
+          status.includes("PAID") ||
+          status.includes("PAGADA") ||
+          status.includes("PARCIAL") ||
+          status.includes("PARTIALLY");
+
+        const isPending =
+          status.includes("PENDING") || status.includes("PENDIENTE");
+
+        if (isPaid) {
+          group.paidCount += 1;
+          group.totalPaid += paid > 0 ? paid : amount;
+          return;
+        }
+
+        if (isPending) {
+          group.pendingCount += 1;
+          group.totalPending += remainingAmount > 0 ? remainingAmount : amount;
+        }
+      });
+
+      const rows = Array.from(grouped.values())
+        .sort((a, b) => a.clientName.localeCompare(b.clientName))
+        .map((group) => ({
+          "Nombre de cliente": group.clientName,
+          "Cantidad de cuotas pagas": `${group.paidCount}/${group.totalInstallments}`,
+          "Valor cuota": group.installmentValue,
+          "Total pagado": group.totalPaid,
+          "Cantidad de cuotas pendientes": `${group.pendingCount}/${group.totalInstallments}`,
+          "Total pendiente": group.totalPending,
+        }));
+
+      const workbook = XLSX.utils.book_new();
+
+      XLSX.utils.book_append_sheet(
+        workbook,
+        createCorporateSheet("Pagos y deuda por cliente", rows),
+        "Pagos deuda clientes"
+      );
+
+      XLSX.writeFile(
+        workbook,
+        `GL-Motors-pagos-deuda-clientes-${new Date()
+          .toISOString()
+          .slice(0, 10)}.xlsx`
+      );
+    } catch (err: any) {
+      setError(
+        err?.response?.data?.mensaje ||
+          err?.message ||
+          "No se pudo exportar pagos/deuda por cliente"
+      );
+    }
+  }
+
   const alertasEjecutivas = [
     porcentajeCobranzaMes < 0.6
       ? {
@@ -889,15 +1030,28 @@ export default function ManagerDashboard() {
               </Typography>
             </Box>
 
-            <Button
-              variant="contained"
-              startIcon={<DownloadIcon />}
-              onClick={handleExportExcel}
-              disabled={!data}
-              sx={{ fontWeight: 700 }}
-            >
-              Exportar Excel
-            </Button>
+            <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
+              <Button
+                variant="contained"
+                startIcon={<DownloadIcon />}
+                onClick={handleExportExcel}
+                disabled={!data}
+                sx={{ fontWeight: 700 }}
+              >
+                Exportar Excel
+              </Button>
+
+              <Button
+                variant="contained"
+                color="secondary"
+                startIcon={<DownloadIcon />}
+                onClick={handleExportClientDebtExcel}
+                disabled={!data}
+                sx={{ fontWeight: 700 }}
+              >
+                Exportar pagos/deuda por cliente
+              </Button>
+            </Stack>
           </Stack>
         </Box>
 
