@@ -34,6 +34,10 @@ import DirectoLeads from "./pages/DirectoLeads";
 import ManagerDashboard from "./pages/ManagerDashboard";
 import CuotaRedLeads from "./pages/CuotaRedLeads";
 import JudicialExecutions from "./pages/JudicialExecutions";
+import LoanClients from "./pages/LoanClients";
+import Loans from "./pages/Loans";
+import LoanInstallments from "./pages/LoanInstallments";
+import LoanInstallmentPayments from "./pages/LoanInstallmentPayments";
 
 // Assets & global
 import theme from "./theme";
@@ -224,6 +228,42 @@ const App = () => {
   element={
     <ProtectedRoute permissionKey="cuotared">
       <CuotaRedLeads />
+    </ProtectedRoute>
+  }
+/>
+
+<Route
+  path="/loan-clients"
+  element={
+    <ProtectedRoute permissionKey="loan-clients">
+      <LoanClients />
+    </ProtectedRoute>
+  }
+/>
+
+<Route
+  path="/loans"
+  element={
+    <ProtectedRoute permissionKey="loans">
+      <Loans />
+    </ProtectedRoute>
+  }
+/>
+
+<Route
+  path="/loan-installments"
+  element={
+    <ProtectedRoute permissionKey="loan-installments">
+      <LoanInstallments />
+    </ProtectedRoute>
+  }
+/>
+
+<Route
+  path="/loan-installment-payments"
+  element={
+    <ProtectedRoute permissionKey="loan-installment-payments">
+      <LoanInstallmentPayments />
     </ProtectedRoute>
   }
 />

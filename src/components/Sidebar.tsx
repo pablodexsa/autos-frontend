@@ -24,6 +24,7 @@ import DashboardIcon from "@mui/icons-material/Dashboard";
 import { useNavigate, useLocation } from "react-router-dom";
 import { permissions } from "../permissions";
 import { useAuth } from "../context/AuthContext";
+import AccountBalanceWalletIcon from "@mui/icons-material/AccountBalanceWallet";
 
 
 const drawerWidth = 240;
@@ -65,6 +66,10 @@ const Sidebar: React.FC<SidebarProps> = ({ mobileOpen = false, handleDrawerToggl
     { text: "Cuotas Devengadas", icon: <ListAltIcon />, path: "/installments", key: "installments" },
     { text: "Cuotas Pagas", icon: <PaymentsIcon />, path: "/installment-payments", key: "installment-payments" },
     { text: "Ejecuciones Judiciales", icon: <PaidIcon />, path: "/judicial-executions", key: "judicial-executions" },
+    { text: "Clientes Préstamos", icon: <PeopleIcon />, path: "/loan-clients", key: "loan-clients" },
+    { text: "Préstamos", icon: <AccountBalanceWalletIcon />, path: "/loans", key: "loans" },
+    { text: "Cuotas de Préstamos", icon: <ListAltIcon />, path: "/loan-installments", key: "loan-installments" },
+    { text: "Cuotas pagas de Préstamos", icon: <PaymentsIcon />, path: "/loan-installment-payments", key: "loan-installment-payments" },
     { text: "Configuración", icon: <SettingsIcon />, path: "/settings", key: "settings" },
     { text: "Auditoría del Sistema", icon: <ListAltIcon />, path: "/audit", key: "audit" },
     { text: "Usuarios", icon: <PersonIcon />, path: "/users", key: "users" },
