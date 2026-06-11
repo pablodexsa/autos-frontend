@@ -38,6 +38,8 @@ import LoanClients from "./pages/LoanClients";
 import Loans from "./pages/Loans";
 import LoanInstallments from "./pages/LoanInstallments";
 import LoanInstallmentPayments from "./pages/LoanInstallmentPayments";
+import KairosLeadsPage from "./pages/KairosLeadsPage";
+
 
 // Assets & global
 import theme from "./theme";
@@ -228,6 +230,15 @@ const App = () => {
   element={
     <ProtectedRoute permissionKey="cuotared">
       <CuotaRedLeads />
+    </ProtectedRoute>
+  }
+/>
+
+<Route
+  path="/kairos-leads"
+  element={
+    <ProtectedRoute permissionKey="kairos-leads">
+      <KairosLeadsPage />
     </ProtectedRoute>
   }
 />

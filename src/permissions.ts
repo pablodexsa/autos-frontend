@@ -16,6 +16,7 @@
     "installment-payments",
     "installments",
     "judicial-executions",
+    "kairos-leads",
     "loan-clients",
     "loans",
     "loan-installments",

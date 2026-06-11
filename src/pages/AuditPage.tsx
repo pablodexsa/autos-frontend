@@ -86,6 +86,7 @@ const parseModuleInfo = (rawModule: string | null | undefined) => {
     Installments: "Pagos / Cuotas",
     Settings: "Configuración",
     Audit: "Auditoría",
+    KairosLeads: "Kairos",
   };
 
   const entityLabel = map[area] || area;
@@ -110,6 +111,7 @@ const buildBusinessDescription = (log: any, entityLabel: string): string => {
     "Pagos / Cuotas": "pago/cuota",
     "Configuración": "configuración",
     "Auditoría": "auditoría",
+    "Kairos": "lead Kairos",
   };
 
   const entitySingular =

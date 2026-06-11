@@ -25,6 +25,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { permissions } from "../permissions";
 import { useAuth } from "../context/AuthContext";
 import AccountBalanceWalletIcon from "@mui/icons-material/AccountBalanceWallet";
+import RequestQuoteIcon from "@mui/icons-material/RequestQuote";
 
 
 const drawerWidth = 240;
@@ -66,6 +67,7 @@ const Sidebar: React.FC<SidebarProps> = ({ mobileOpen = false, handleDrawerToggl
     { text: "Cuotas Devengadas", icon: <ListAltIcon />, path: "/installments", key: "installments" },
     { text: "Cuotas Pagas", icon: <PaymentsIcon />, path: "/installment-payments", key: "installment-payments" },
     { text: "Ejecuciones Judiciales", icon: <PaidIcon />, path: "/judicial-executions", key: "judicial-executions" },
+    { text: "Kairos", icon: <RequestQuoteIcon />, path: "/kairos-leads", key: "kairos-leads" },
     { text: "Clientes Préstamos", icon: <PeopleIcon />, path: "/loan-clients", key: "loan-clients" },
     { text: "Préstamos", icon: <AccountBalanceWalletIcon />, path: "/loans", key: "loans" },
     { text: "Cuotas de Préstamos", icon: <ListAltIcon />, path: "/loan-installments", key: "loan-installments" },
