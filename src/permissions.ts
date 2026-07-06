@@ -16,11 +16,6 @@
     "installment-payments",
     "installments",
     "judicial-executions",
-    "kairos-leads",
-    "loan-clients",
-    "loans",
-    "loan-installments",
-    "loan-installment-payments",
     "settings",
     "users",
     "roles",
@@ -44,10 +39,6 @@ owner: [
   "installment-payments",
   "installments",
   "judicial-executions",
-  "loan-clients",
-  "loans",
-  "loan-installments",
-  "loan-installment-payments",
   "settings",
   "audit",
 ],
@@ -135,4 +126,5 @@ owner: [
     "installments",
     "judicial-executions",
   ],
+
 };
