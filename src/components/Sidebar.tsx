@@ -46,10 +46,11 @@ const Sidebar: React.FC<SidebarProps> = ({ mobileOpen = false, handleDrawerToggl
       ? user.role.toLowerCase()
       : user?.role?.name?.toLowerCase() || "";
 
-  const allowedKeys = permissions[role] || [];
+  const allowedKeys = permissions[role as keyof typeof permissions] || [];
 
   const menuItems = [
     { text: "Dashboard Gerencial", icon: <DashboardIcon />, path: "/dashboard-gerencial", key: "dashboard_gerencial" },
+    { text: "Dashboard Financiero", icon: <AccountBalanceWalletIcon />, path: "/financial-dashboard", key: "financial-dashboard" },
     { text: "Vehículos", icon: <DirectionsCarIcon />, path: "/vehicles", key: "vehicles" },
     { text: "Clientes", icon: <PeopleIcon />, path: "/clients", key: "clients" },
     { text: "Créditos Directo", icon: <CreditScoreIcon />, path: "/directo", key: "directo" },
@@ -67,11 +68,11 @@ const Sidebar: React.FC<SidebarProps> = ({ mobileOpen = false, handleDrawerToggl
     { text: "Cuotas Devengadas", icon: <ListAltIcon />, path: "/installments", key: "installments" },
     { text: "Cuotas Pagas", icon: <PaymentsIcon />, path: "/installment-payments", key: "installment-payments" },
     { text: "Ejecuciones Judiciales", icon: <PaidIcon />, path: "/judicial-executions", key: "judicial-executions" },
-    { text: "Kairos", icon: <RequestQuoteIcon />, path: "/kairos-leads", key: "kairos-leads" },
-    { text: "Clientes Préstamos", icon: <PeopleIcon />, path: "/loan-clients", key: "loan-clients" },
+    { text: "Oportunidades", icon: <RequestQuoteIcon />, path: "/kairos-leads", key: "kairos-leads" },
+    { text: "Clientes", icon: <PeopleIcon />, path: "/loan-clients", key: "loan-clients" },
     { text: "Préstamos", icon: <AccountBalanceWalletIcon />, path: "/loans", key: "loans" },
-    { text: "Cuotas de Préstamos", icon: <ListAltIcon />, path: "/loan-installments", key: "loan-installments" },
-    { text: "Cuotas pagas de Préstamos", icon: <PaymentsIcon />, path: "/loan-installment-payments", key: "loan-installment-payments" },
+    { text: "Cuotas Devengadas", icon: <ListAltIcon />, path: "/loan-installments", key: "loan-installments" },
+    { text: "Cuotas Pagas", icon: <PaymentsIcon />, path: "/loan-installment-payments", key: "loan-installment-payments" },
     { text: "Configuración", icon: <SettingsIcon />, path: "/settings", key: "settings" },
     { text: "Auditoría del Sistema", icon: <ListAltIcon />, path: "/audit", key: "audit" },
     { text: "Usuarios", icon: <PersonIcon />, path: "/users", key: "users" },

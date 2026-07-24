@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import {
   Box,
   Typography,
@@ -48,6 +48,12 @@ interface Sale {
   paymentDay: number;
   initialPaymentMonth: string;
   sellerName?: string | null;
+  paymentType?: string | null;
+  kairosLoanId?: number | null;
+  kairosCuitCuil?: string | null;
+  kairosFinancedAmount?: number | null;
+  kairosWeeklyInstallments?: number | null;
+  kairosFirstDueDate?: string | null;
 }
 
 const SalesList: React.FC = () => {
@@ -60,6 +66,21 @@ const SalesList: React.FC = () => {
   const [sellerFilter, setSellerFilter] = useState('');
   const [plateFilter, setPlateFilter] = useState('');
   const [dniFilter, setDniFilter] = useState('');
+
+  const formatPaymentType = (paymentType?: string | null) => {
+    switch (paymentType) {
+      case 'contado':
+        return 'Contado';
+      case 'anticipo_financiacion':
+        return 'Anticipo + Financiación';
+      case 'plan_motos_0km':
+        return 'Plan Motos 0km';
+      case 'kairos_financing':
+        return 'Financiación Kairos';
+      default:
+        return '-';
+    }
+  };
 
   const filteredSales = useMemo(
     () =>
@@ -131,6 +152,7 @@ const SalesList: React.FC = () => {
       `${s.vehicle?.brand || ''} ${s.vehicle?.model || ''}`,
       s.vehicle?.plate || '-',
       s.sellerName || '-',
+      formatPaymentType(s.paymentType),
       `$ ${s.finalPrice.toLocaleString()}`,
       new Date(s.createdAt).toLocaleDateString(),
     ]);
@@ -145,6 +167,7 @@ const SalesList: React.FC = () => {
           'Vehículo',
           'Patente',
           'Vendedor',
+          'Forma de pago',
           'Precio Final',
           'Fecha',
         ],
@@ -236,6 +259,7 @@ const SalesList: React.FC = () => {
                 <TableCell>Vehículo</TableCell>
                 <TableCell>Patente</TableCell>
                 <TableCell>Vendedor</TableCell>
+                <TableCell>Forma de pago</TableCell>
                 <TableCell>Precio Final</TableCell>
                 <TableCell>Fecha</TableCell>
                 <TableCell align="center">Acciones</TableCell>
@@ -245,7 +269,7 @@ const SalesList: React.FC = () => {
             <TableBody>
               {filteredSales.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={10} align="center">
+                  <TableCell colSpan={11} align="center">
                     No hay ventas registradas.
                   </TableCell>
                 </TableRow>
@@ -260,6 +284,7 @@ const SalesList: React.FC = () => {
                     </TableCell>
                     <TableCell>{s.vehicle?.plate || '-'}</TableCell>
                     <TableCell>{s.sellerName ?? '-'}</TableCell>
+                    <TableCell>{formatPaymentType(s.paymentType)}</TableCell>
                     <TableCell>${s.finalPrice.toLocaleString()}</TableCell>
                     <TableCell>
                       {new Date(s.createdAt).toLocaleDateString()}
@@ -319,6 +344,9 @@ const SalesList: React.FC = () => {
                 Fecha de venta:{' '}
                 {new Date(selectedSale.createdAt).toLocaleDateString()}
               </Typography>
+              <Typography variant="body2" gutterBottom>
+                Forma de pago: {formatPaymentType(selectedSale.paymentType)}
+              </Typography>
 
               <Divider sx={{ my: 2 }} />
 
@@ -343,6 +371,39 @@ const SalesList: React.FC = () => {
                 Financiación Interna:{' '}
                 ${selectedSale.inHouseAmount.toLocaleString()}
               </Typography>
+
+              {selectedSale.paymentType === 'kairos_financing' && (
+                <>
+                  <Divider sx={{ my: 2 }} />
+                  <Typography variant="h6" color="primary" gutterBottom>
+                    Financiación Kairos
+                  </Typography>
+                  <Typography variant="body2">
+                    Préstamo Kairos: #{selectedSale.kairosLoanId ?? '-'}
+                  </Typography>
+                  <Typography variant="body2">
+                    CUIT/CUIL: {selectedSale.kairosCuitCuil || '-'}
+                  </Typography>
+                  <Typography variant="body2">
+                    Capital financiado: $
+                    {Number(selectedSale.kairosFinancedAmount || 0).toLocaleString()}
+                  </Typography>
+                  <Typography variant="body2">
+                    Cuotas semanales: {selectedSale.kairosWeeklyInstallments || '-'}
+                  </Typography>
+                  <Typography variant="body2">
+                    Primer vencimiento:{' '}
+                    {selectedSale.kairosFirstDueDate
+                      ? new Date(
+                          `${selectedSale.kairosFirstDueDate}T12:00:00`
+                        ).toLocaleDateString()
+                      : '-'}
+                  </Typography>
+                  <Typography variant="body2">Interés mensual: 25%</Typography>
+                  <Typography variant="body2">Mora diaria: 1%</Typography>
+                </>
+              )}
+
               <Divider sx={{ my: 2 }} />
               <Typography variant="h6" color="primary">
                 Precio Final: ${selectedSale.finalPrice.toLocaleString()}

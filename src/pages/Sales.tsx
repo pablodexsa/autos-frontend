@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Box,
   Paper,
@@ -93,6 +93,9 @@ const Sales: React.FC = () => {
     installmentValue: "",
     paymentDay: 5,
     initialPaymentMonth: "",
+    kairosFinancedAmount: "",
+    kairosWeeklyInstallments: "",
+    saleDate: new Date().toISOString().slice(0, 10),
   });
 
   const formatPesos = (valor: any) => {
@@ -239,6 +242,9 @@ const Sales: React.FC = () => {
         montoFinanciacion: "",
         installments: "",
         installmentValue: "",
+            kairosFinancedAmount: "",
+        kairosWeeklyInstallments: "",
+        saleDate: new Date().toISOString().slice(0, 10),
       }));
     } else {
       setForm((prev) => ({
@@ -257,6 +263,9 @@ const Sales: React.FC = () => {
         montoFinanciacion: "",
         installments: "",
         installmentValue: "",
+            kairosFinancedAmount: "",
+        kairosWeeklyInstallments: "",
+        saleDate: new Date().toISOString().slice(0, 10),
       }));
     }
   };
@@ -459,6 +468,35 @@ const Sales: React.FC = () => {
 
   const isMotoPlanVehicle = !!selectedVehicle?.isMotoPlan;
   const isMotoPlanPayment = form.paymentType === "plan_motos_0km";
+  const isKairosPayment = form.paymentType === "kairos_financing";
+
+  const kairosFinancedAmount = Number(form.kairosFinancedAmount) || 0;
+  const kairosWeeklyInstallments = Number(form.kairosWeeklyInstallments) || 0;
+  const kairosInterestAmount = Math.round(
+    kairosFinancedAmount * 0.25 * (kairosWeeklyInstallments / 4)
+  );
+  const kairosTotalToRepay = kairosFinancedAmount + kairosInterestAmount;
+  const kairosInstallmentValue =
+    kairosWeeklyInstallments > 0
+      ? kairosTotalToRepay / kairosWeeklyInstallments
+      : 0;
+  const kairosDataMissing =
+    isKairosPayment &&
+    (kairosFinancedAmount <= 0 ||
+      ![6, 8, 10, 12, 15, 18, 20, 22, 24, 26, 28, 30, 32, 34, 36].includes(
+        kairosWeeklyInstallments
+      ) ||
+      !form.saleDate);
+
+  const kairosFirstDueDate = useMemo(() => {
+    if (!form.saleDate) return "";
+    const [year, month, day] = form.saleDate.split("-").map(Number);
+    const date = new Date(year, month - 1, day, 12, 0, 0);
+    date.setDate(date.getDate() + 7);
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(
+      date.getDate()
+    ).padStart(2, "0")}`;
+  }, [form.saleDate]);
 
   const requiresInstallments = form.paymentType === "anticipo_financiacion";
   const missingInstallments = requiresInstallments && !form.installments;
@@ -472,15 +510,19 @@ const Sales: React.FC = () => {
     (Number(form.downPayment) || 0) +
     (form.hasTradeIn ? Number(form.tradeInValue) || 0 : 0) +
     (Number(form.montoPrendario) || 0) +
-    (Number(form.montoPersonal) || 0) +
-    (Number(form.montoFinanciacion) || 0);
+    (isKairosPayment
+      ? kairosFinancedAmount
+      : (Number(form.montoPersonal) || 0) +
+        (Number(form.montoFinanciacion) || 0));
 
   const someAmountEntered =
     (Number(form.downPayment) || 0) ||
     (form.hasTradeIn ? Number(form.tradeInValue) || 0 : 0) ||
     (Number(form.montoPrendario) || 0) ||
-    (Number(form.montoPersonal) || 0) ||
-    (Number(form.montoFinanciacion) || 0);
+    (isKairosPayment
+      ? kairosFinancedAmount
+      : (Number(form.montoPersonal) || 0) +
+        (Number(form.montoFinanciacion) || 0));
 
   const compositionDiff =
     selectedVehicle && someAmountEntered
@@ -488,9 +530,8 @@ const Sales: React.FC = () => {
       : 0;
 
   const compositionMismatch =
-    form.paymentType === "anticipo_financiacion" &&
+    (form.paymentType === "anticipo_financiacion" || isKairosPayment) &&
     !!selectedVehicle &&
-    !!someAmountEntered &&
     compositionDiff > 1;
 
   const nCuotas = Number(form.installments) || 0;
@@ -559,18 +600,33 @@ const Sales: React.FC = () => {
         return "Anticipo + Financiación";
       case "plan_motos_0km":
         return "Plan Motos 0km";
+      case "kairos_financing":
+        return "Financiación Kairos";
       default:
         return "-";
     }
   };
 
   const handlePaymentTypeChange = (
-    value: "" | "contado" | "anticipo_financiacion" | "plan_motos_0km"
+    value:
+      | ""
+      | "contado"
+      | "anticipo_financiacion"
+      | "plan_motos_0km"
+      | "kairos_financing"
   ) => {
     setErrors({ tradeIn: "", prendario: "", financiacion: "" });
     setForm((prev) => ({
       ...prev,
       paymentType: value,
+      kairosFinancedAmount:
+        value === "kairos_financing" ? prev.kairosFinancedAmount : "",
+      kairosWeeklyInstallments:
+        value === "kairos_financing" ? prev.kairosWeeklyInstallments : "",
+      saleDate:
+        value === "kairos_financing"
+          ? prev.saleDate || new Date().toISOString().slice(0, 10)
+          : prev.saleDate,
       ...(value === "contado"
         ? {
             selectedMotoPlan: "",
@@ -585,6 +641,15 @@ const Sales: React.FC = () => {
       ...(value === "anticipo_financiacion"
         ? {
             selectedMotoPlan: "",
+          }
+        : {}),
+      ...(value === "kairos_financing"
+        ? {
+            selectedMotoPlan: "",
+            montoPersonal: "",
+            montoFinanciacion: "",
+            installments: "",
+            installmentValue: "",
           }
         : {}),
       ...(value === "plan_motos_0km"
@@ -625,6 +690,38 @@ const handleSaveSale = async () => {
       return;
     }
 
+    if (form.paymentType === "kairos_financing") {
+      if (kairosFinancedAmount <= 0) {
+        setAlert({
+          open: true,
+          message: "Debe ingresar un monto Kairos mayor a cero.",
+          severity: "warning",
+        });
+        return;
+      }
+
+      const allowedKairosInstallments = [
+        6, 8, 10, 12, 15, 18, 20, 22, 24, 26, 28, 30, 32, 34, 36,
+      ];
+      if (!allowedKairosInstallments.includes(kairosWeeklyInstallments)) {
+        setAlert({
+          open: true,
+          message: "Seleccione una cantidad válida de cuotas semanales Kairos.",
+          severity: "warning",
+        });
+        return;
+      }
+
+      if (!form.saleDate) {
+        setAlert({
+          open: true,
+          message: "Debe indicar la fecha de venta.",
+          severity: "warning",
+        });
+        return;
+      }
+    }
+
     if (form.paymentType === "anticipo_financiacion" && !form.installments) {
       setAlert({
         open: true,
@@ -641,6 +738,26 @@ const handleSaveSale = async () => {
         severity: "warning",
       });
       return;
+    }
+
+    if (form.paymentType === "kairos_financing") {
+      const vehiclePriceLocal = Number(selectedVehicle.price) || 0;
+      const totalCompositionLocal =
+        (Number(form.downPayment) || 0) +
+        (form.hasTradeIn ? Number(form.tradeInValue) || 0 : 0) +
+        (Number(form.montoPrendario) || 0) +
+        kairosFinancedAmount;
+
+      if (Math.abs(totalCompositionLocal - vehiclePriceLocal) > 1) {
+        setAlert({
+          open: true,
+          message: `Los montos no suman el valor del auto. La suma cargada es ${formatPesos(
+            totalCompositionLocal
+          )} y el vehículo vale ${formatPesos(vehiclePriceLocal)}.`,
+          severity: "warning",
+        });
+        return;
+      }
     }
 
     if (form.paymentType === "anticipo_financiacion") {
@@ -692,6 +809,16 @@ const handleSaveSale = async () => {
       prendarioMonthlyRate: 0,
       personalMonthlyRate: 0,
       inHouseMonthlyRate: 0,
+      kairosFinancedAmount:
+        form.paymentType === "kairos_financing"
+          ? kairosFinancedAmount
+          : undefined,
+      kairosWeeklyInstallments:
+        form.paymentType === "kairos_financing"
+          ? kairosWeeklyInstallments
+          : undefined,
+      saleDate:
+        form.paymentType === "kairos_financing" ? form.saleDate : undefined,
     };
 
     const res = await api.post("/sales", payload, {
@@ -852,6 +979,7 @@ const handleSaveSale = async () => {
                   | "contado"
                   | "anticipo_financiacion"
                   | "plan_motos_0km"
+                  | "kairos_financing"
               )
             }
             fullWidth
@@ -861,10 +989,100 @@ const handleSaveSale = async () => {
             <MenuItem value="anticipo_financiacion">
               Anticipo + Financiación
             </MenuItem>
+            <MenuItem value="kairos_financing">
+              Anticipo + Financiación Kairos
+            </MenuItem>
             {isMotoPlanVehicle && (
               <MenuItem value="plan_motos_0km">Plan Motos 0km</MenuItem>
             )}
           </TextField>
+
+          {isKairosPayment && (
+            <>
+              <TextField
+                label="Anticipo"
+                type="number"
+                value={form.downPayment}
+                onChange={(e) =>
+                  setForm((prev) => ({ ...prev, downPayment: e.target.value }))
+                }
+                inputProps={{ min: 0, step: 1 }}
+                fullWidth
+                sx={{ input: { color: "#fff" }, label: { color: "#ccc" } }}
+              />
+
+              <TextField
+                label="Monto Préstamo Prendario (neto)"
+                type="number"
+                value={form.montoPrendario}
+                onChange={(e) =>
+                  setForm((prev) => ({ ...prev, montoPrendario: e.target.value }))
+                }
+                inputProps={{ min: 0, step: 1 }}
+                fullWidth
+                sx={{ input: { color: "#fff" }, label: { color: "#ccc" } }}
+              />
+
+              <TextField
+                label="Monto Kairos"
+                type="number"
+                value={form.kairosFinancedAmount}
+                onChange={(e) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    kairosFinancedAmount: e.target.value,
+                  }))
+                }
+                inputProps={{ min: 1, step: 1 }}
+                fullWidth
+                sx={{ input: { color: "#fff" }, label: { color: "#ccc" } }}
+              />
+
+              <TextField
+                select
+                label="Cuotas semanales Kairos"
+                value={form.kairosWeeklyInstallments}
+                onChange={(e) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    kairosWeeklyInstallments: e.target.value,
+                  }))
+                }
+                fullWidth
+                sx={{ input: { color: "#fff" }, label: { color: "#ccc" } }}
+              >
+                {[6, 8, 10, 12, 15, 18, 20, 22, 24, 26, 28, 30, 32, 34, 36].map(
+                  (q) => (
+                    <MenuItem key={q} value={q}>
+                      {q} cuotas semanales
+                    </MenuItem>
+                  )
+                )}
+              </TextField>
+
+              <TextField
+                label="Fecha de venta"
+                type="date"
+                value={form.saleDate}
+                onChange={(e) =>
+                  setForm((prev) => ({ ...prev, saleDate: e.target.value }))
+                }
+                InputLabelProps={{ shrink: true }}
+                fullWidth
+                sx={{ input: { color: "#fff" }, label: { color: "#ccc" } }}
+              />
+
+              <TextField
+                label="Primer vencimiento (+7 días)"
+                type="date"
+                value={kairosFirstDueDate}
+                InputProps={{ readOnly: true }}
+                InputLabelProps={{ shrink: true }}
+                fullWidth
+                sx={{ input: { color: "#fff" }, label: { color: "#ccc" } }}
+              />
+            </>
+          )}
 
           {isMotoPlanPayment && (
             <TextField
@@ -921,7 +1139,7 @@ const handleSaveSale = async () => {
 
           {form.paymentType === "anticipo_financiacion" && (
             <TextField
-              label="Monto Préstamo Personal (neto)"
+              label="Monto Préstamo Personal BNA (neto)"
               type="number"
               value={form.montoPersonal}
               onChange={(e) =>
@@ -937,7 +1155,7 @@ const handleSaveSale = async () => {
 
           {form.paymentType === "anticipo_financiacion" && (
             <TextField
-              label="Monto Financiación Personal (neto)"
+              label="Crédito Interno (neto)"
               type="number"
               value={form.montoFinanciacion}
               onChange={(e) =>
@@ -1024,6 +1242,39 @@ const handleSaveSale = async () => {
           )}
         </Box>
 
+        {isKairosPayment && kairosFinancedAmount > 0 && (
+          <Paper
+            sx={{
+              mt: 2,
+              p: 2,
+              backgroundColor: "#25253a",
+              border: "1px solid rgba(255,255,255,0.08)",
+            }}
+          >
+            <Typography variant="h6" sx={{ color: "#fff", mb: 1 }}>
+              Simulación Financiación Kairos
+            </Typography>
+            <Typography sx={{ color: "#ddd" }}>
+              Capital financiado: {formatPesos(kairosFinancedAmount)}
+            </Typography>
+            <Typography sx={{ color: "#ddd" }}>
+              Interés aplicado: 25% mensual durante {kairosWeeklyInstallments || 0} semanas
+            </Typography>
+            <Typography sx={{ color: "#ddd" }}>
+              Total a devolver: {formatPesos(kairosTotalToRepay)}
+            </Typography>
+            <Typography sx={{ color: "#ddd" }}>
+              Cuotas semanales: {kairosWeeklyInstallments || "-"}
+            </Typography>
+            <Typography sx={{ color: "#ddd" }}>
+              Valor estimado por cuota: {formatPesos(kairosInstallmentValue)}
+            </Typography>
+            <Typography sx={{ color: "#ddd" }}>
+              Mora: 1% diario sobre el saldo vencido
+            </Typography>
+          </Paper>
+        )}
+
         {isMotoPlanPayment && selectedMotoPlanConfig && (
           <Paper
             sx={{
@@ -1069,10 +1320,9 @@ const handleSaveSale = async () => {
         {compositionMismatch && (
           <Box mt={2}>
             <Typography color="warning.main" variant="body2">
-              La suma de anticipo, permuta y financiaciones (
-              {formatPesos(totalComposition)}) no coincide con el precio del
-              vehículo ({formatPesos(vehiclePrice)}). Ajuste los importes para
-              continuar.
+              Los montos no suman el valor del auto. Anticipo, permuta,
+              prendario y financiación deben sumar {formatPesos(vehiclePrice)}.
+              Actualmente suman {formatPesos(totalComposition)}.
             </Typography>
           </Box>
         )}
@@ -1090,6 +1340,7 @@ const handleSaveSale = async () => {
               (form.paymentType === "anticipo_financiacion" &&
                 missingInstallments) ||
               (isMotoPlanPayment && !form.selectedMotoPlan) ||
+              kairosDataMissing ||
               compositionMismatch
             }
           >
@@ -1119,11 +1370,37 @@ const handleSaveSale = async () => {
             Forma de pago: {labelPayment(form.paymentType)}
           </Typography>
 
+          {isKairosPayment && (
+            <Box sx={{ mt: 2 }}>
+              <Typography variant="h6" sx={{ color: "#009879", mb: 1 }}>
+                Detalle Financiación Kairos
+              </Typography>
+              <Typography>
+                Capital financiado: {formatPesos(kairosFinancedAmount)}
+              </Typography>
+              <Typography>Interés aplicado: 25% mensual</Typography>
+              <Typography>
+                Total a devolver: {formatPesos(kairosTotalToRepay)}
+              </Typography>
+              <Typography>
+                Cuotas semanales: {kairosWeeklyInstallments || "-"}
+              </Typography>
+              <Typography>
+                Valor estimado por cuota: {formatPesos(kairosInstallmentValue)}
+              </Typography>
+              <Typography>Anticipo: {formatPesos(form.downPayment)}</Typography>
+              <Typography>Prendario: {formatPesos(form.montoPrendario)}</Typography>
+              <Typography>Fecha de venta: {form.saleDate || "-"}</Typography>
+              <Typography>Primer vencimiento: {kairosFirstDueDate || "-"}</Typography>
+              <Typography>Mora: 1% diario</Typography>
+            </Box>
+          )}
+
           {isMotoPlanPayment && form.selectedMotoPlan && (
             <Typography>Plan: {form.selectedMotoPlan}</Typography>
           )}
 
-          {isMotoPlanPayment && selectedMotoPlanConfig && (
+        {isMotoPlanPayment && selectedMotoPlanConfig && (
             <Box sx={{ mt: 2 }}>
               <Typography variant="h6" sx={{ color: "#009879", mb: 1 }}>
                 Detalle del plan
@@ -1278,6 +1555,7 @@ const handleSaveSale = async () => {
       (form.paymentType === "anticipo_financiacion" &&
         missingInstallments) ||
       (isMotoPlanPayment && !form.selectedMotoPlan) ||
+      kairosDataMissing ||
       compositionMismatch
     }
   >

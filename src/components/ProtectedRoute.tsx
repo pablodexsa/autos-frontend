@@ -41,10 +41,11 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   }
 
   // ✅ Rol (soporta user.role string o user.role.name)
-  const role =
+  const role = (
     typeof (user as any)?.role === "string"
       ? (user as any).role
-      : (user as any)?.role?.name || "";
+      : (user as any)?.role?.name || ""
+  ).toLowerCase();
 
   // ✅ Si se especifican roles permitidos, validar
   if (roles?.length) {
@@ -55,7 +56,7 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
 
   // ✅ Si se especifica permissionKey, validar contra permissions.ts
   if (permissionKey) {
-    const allowed = permissions[role] || [];
+    const allowed = permissions[role as keyof typeof permissions] || [];
     if (!allowed.includes(permissionKey)) {
       return <Navigate to="/" replace />;
     }
