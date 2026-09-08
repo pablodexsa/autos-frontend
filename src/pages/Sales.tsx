@@ -157,7 +157,9 @@ const Sales: React.FC = () => {
     if (!months || months <= 0) return 0;
     if (months <= 12) return 12;
     if (months <= 24) return 24;
-    return 36;
+    if (months <= 36) return 36;
+    if (months <= 48) return 48;
+    return 0;
   };
 
   const getRate = (
@@ -1188,7 +1190,7 @@ const handleSaveSale = async () => {
               fullWidth
               sx={{ input: { color: "#fff" }, label: { color: "#ccc" } }}
             >
-              {Array.from({ length: 36 }, (_, idx) => idx + 1).map((q) => (
+              {Array.from({ length: 48 }, (_, idx) => idx + 1).map((q) => (
                 <MenuItem key={q} value={q}>
                   {q} cuotas
                 </MenuItem>

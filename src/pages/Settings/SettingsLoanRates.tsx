@@ -39,7 +39,7 @@ export default function SettingsLoanRates() {
     () => data?.types ?? (["prendario", "personal", "financiacion"] as LoanType[]),
     [data]
   );
-  const months = useMemo(() => data?.months ?? [12, 24, 36], [data]);
+  const months = useMemo(() => data?.months ?? [12, 24, 36, 48], [data]);
 
   useEffect(() => {
     let mounted = true;
@@ -82,7 +82,7 @@ export default function SettingsLoanRates() {
   const onSave = async () => {
     if (!form) return;
 
-    const items: Array<{ type: LoanType; months: 12 | 24 | 36; rate: number }> = [];
+    const items: Array<{ type: LoanType; months: 12 | 24 | 36 | 48; rate: number }> = [];
 
     for (const t of types) {
       for (const m of months) {
@@ -96,7 +96,7 @@ export default function SettingsLoanRates() {
 
         items.push({
           type: t,
-          months: m as 12 | 24 | 36,
+          months: m as 12 | 24 | 36 | 48,
           rate: Number(num.toFixed(2)),
         });
       }
@@ -131,7 +131,7 @@ export default function SettingsLoanRates() {
       <Paper sx={{ p: 2 }}>
         <Typography variant="h6">Porcentajes de financiación</Typography>
         <Typography variant="body2" sx={{ opacity: 0.8, mt: 0.5 }}>
-          Editá los porcentajes por tipo y cuotas (12, 24, 36).
+          Editá los porcentajes por tipo y cuotas (12, 24, 36, 48).
         </Typography>
 
         <Divider sx={{ my: 2 }} />
@@ -152,12 +152,13 @@ export default function SettingsLoanRates() {
 
                   <Grid container spacing={2}>
                     {months.map((m) => (
-                      <Grid item xs={12} sm={4} key={`${t}-${m}`}>
+                      <Grid item xs={12} sm={3} key={`${t}-${m}`}>
                         <TextField
                           fullWidth
                           label={`${m} cuotas (%)`}
                           value={form[t][m]}
                           onChange={(e) => onChange(t, m, e.target.value)}
+                          disabled={m === 48 && t !== "financiacion"}
                           inputProps={{ inputMode: "decimal" }}
                         />
                       </Grid>
