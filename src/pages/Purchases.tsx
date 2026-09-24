@@ -1,5 +1,5 @@
 ﻿import { useEffect, useState } from "react";
-import { api } from "../api";
+import api from "../api/api";
 import { PurchaseForm } from "../components/PurchaseForm";
 import { PurchaseTable } from "../components/PurchaseTable";
 

@@ -1,4 +1,4 @@
-﻿import React from "react";
+import React from "react";
 import { BrowserRouter as Router, Routes, Route, useLocation } from "react-router-dom";
 import { ThemeProvider, CssBaseline, Box, Toolbar } from "@mui/material";
 import { SnackbarProvider } from "notistack";
@@ -39,6 +39,7 @@ import Loans from "./pages/Loans";
 import LoanInstallments from "./pages/LoanInstallments";
 import LoanInstallmentPayments from "./pages/LoanInstallmentPayments";
 import KairosLeadsPage from "./pages/KairosLeadsPage";
+import Purchases from "./pages/Purchases";
 
 
 // Assets & global
@@ -194,6 +195,15 @@ const App = () => {
                     element={
                       <ProtectedRoute permissionKey="vehicles">
                         <Vehicles />
+                      </ProtectedRoute>
+                    }
+                  />
+
+                  <Route
+                    path="/purchases"
+                    element={
+                      <ProtectedRoute permissionKey="purchases">
+                        <Purchases />
                       </ProtectedRoute>
                     }
                   />

@@ -16,6 +16,12 @@ import {
 } from "@mui/material";
 import api from "../api/api";
 import LoadingActionButton from "../components/LoadingActionButton";
+import { treasuryApi } from "../api/treasury";
+import { listBrands } from "../api/brands";
+import { listModels } from "../api/models";
+import { listVersions } from "../api/versions";
+import { TreasuryAccount, TreasuryPaymentMethod } from "../types/treasury";
+import { Brand, Model, Version } from "../types/catalog";
 
 type Vehicle = {
   id: number;
@@ -63,6 +69,27 @@ const Sales: React.FC = () => {
   const [maxPersonalFinancing, setMaxPersonalFinancing] =
     useState<number>(3500000);
   const [motoPlans, setMotoPlans] = useState<MotoPlanOption[]>([]);
+  const [treasuryAccounts, setTreasuryAccounts] = useState<TreasuryAccount[]>([]);
+  const [treasuryAllocations, setTreasuryAllocations] = useState<Array<{
+    accountId: string;
+    amount: string;
+    paymentMethod: TreasuryPaymentMethod;
+  }>>([{ accountId: "", amount: "", paymentMethod: "TRANSFER" }]);
+
+  const [tradeBrands, setTradeBrands] = useState<Brand[]>([]);
+  const [tradeModels, setTradeModels] = useState<Model[]>([]);
+  const [tradeVersions, setTradeVersions] = useState<Version[]>([]);
+  const [tradeBrandId, setTradeBrandId] = useState("");
+  const [tradeModelId, setTradeModelId] = useState("");
+  const [tradeVehicle, setTradeVehicle] = useState({
+    versionId: "",
+    year: "",
+    kilometraje: "",
+    plate: "",
+    engineNumber: "",
+    chassisNumber: "",
+    color: "",
+  });
 
   const nextTwoMonths = useMemo(() => {
     const now = new Date();
@@ -152,6 +179,34 @@ const Sales: React.FC = () => {
         setMotoPlans([]);
       });
   }, []);
+
+
+  useEffect(() => {
+    treasuryApi.accounts("GL_MOTORS")
+      .then((items) => setTreasuryAccounts((items || []).filter((a) => a.isActive)))
+      .catch((err) => console.error("Error cargando cuentas GL:", err));
+    listBrands()
+      .then(setTradeBrands)
+      .catch((err) => console.error("Error cargando marcas para permuta:", err));
+  }, []);
+
+  useEffect(() => {
+    if (!tradeBrandId) {
+      setTradeModels([]);
+      setTradeModelId("");
+      setTradeVersions([]);
+      return;
+    }
+    listModels(Number(tradeBrandId)).then(setTradeModels);
+  }, [tradeBrandId]);
+
+  useEffect(() => {
+    if (!tradeModelId) {
+      setTradeVersions([]);
+      return;
+    }
+    listVersions(Number(tradeModelId)).then(setTradeVersions);
+  }, [tradeModelId]);
 
   const mapMonthsToBracket = (months: number): number => {
     if (!months || months <= 0) return 0;
@@ -503,6 +558,22 @@ const Sales: React.FC = () => {
   const requiresInstallments = form.paymentType === "anticipo_financiacion";
   const missingInstallments = requiresInstallments && !form.installments;
 
+  const cashCollectedAtSale = (() => {
+    if (!selectedVehicle) return 0;
+    const price = Number(selectedVehicle.price) || 0;
+    const tradeIn = form.hasTradeIn ? Number(form.tradeInValue) || 0 : 0;
+    if (form.paymentType === "contado") return Math.max(price - tradeIn, 0);
+    return Math.max(Number(form.downPayment) || 0, 0);
+  })();
+
+  const treasuryAllocationTotal = treasuryAllocations.reduce(
+    (sum, a) => sum + (Number(a.amount) || 0),
+    0
+  );
+  const treasuryMismatch =
+    cashCollectedAtSale > 0 &&
+    Math.abs(treasuryAllocationTotal - cashCollectedAtSale) > 0.01;
+
   const vehiclePrice =
     selectedVehicle && selectedVehicle.price
       ? Number(selectedVehicle.price) || 0
@@ -787,6 +858,48 @@ const handleSaveSale = async () => {
       }
     }
 
+    if (cashCollectedAtSale > 0) {
+      if (
+        treasuryAllocations.some(
+          (a) => !a.accountId || !a.paymentMethod || Number(a.amount) <= 0
+        )
+      ) {
+        setAlert({
+          open: true,
+          message: "Complete la cuenta, importe y medio de cobro de Tesorería.",
+          severity: "warning",
+        });
+        return;
+      }
+      if (Math.abs(treasuryAllocationTotal - cashCollectedAtSale) > 0.01) {
+        setAlert({
+          open: true,
+          message: `La distribución de Tesorería debe sumar ${formatPesos(cashCollectedAtSale)}.`,
+          severity: "warning",
+        });
+        return;
+      }
+    }
+
+    if (form.hasTradeIn) {
+      const t = tradeVehicle;
+      if (
+        !t.versionId ||
+        !t.year ||
+        !t.plate.trim() ||
+        !t.engineNumber.trim() ||
+        !t.chassisNumber.trim() ||
+        !t.color.trim()
+      ) {
+        setAlert({
+          open: true,
+          message: "Complete todos los datos obligatorios del vehículo recibido en permuta.",
+          severity: "warning",
+        });
+        return;
+      }
+    }
+
     const payload = {
       clientDni: form.dni.trim(),
       clientName: form.clientName.trim(),
@@ -821,6 +934,27 @@ const handleSaveSale = async () => {
           : undefined,
       saleDate:
         form.paymentType === "kairos_financing" ? form.saleDate : undefined,
+      treasuryAllocations:
+        cashCollectedAtSale > 0
+          ? treasuryAllocations.map((a) => ({
+              accountId: Number(a.accountId),
+              amount: Number(a.amount),
+              paymentMethod: a.paymentMethod,
+            }))
+          : [],
+      tradeInVehicle: form.hasTradeIn
+        ? {
+            versionId: Number(tradeVehicle.versionId),
+            year: Number(tradeVehicle.year),
+            kilometraje: tradeVehicle.kilometraje
+              ? Number(tradeVehicle.kilometraje)
+              : null,
+            plate: tradeVehicle.plate.trim().toUpperCase(),
+            engineNumber: tradeVehicle.engineNumber.trim(),
+            chassisNumber: tradeVehicle.chassisNumber.trim(),
+            color: tradeVehicle.color.trim(),
+          }
+        : undefined,
     };
 
     const res = await api.post("/sales", payload, {
@@ -950,16 +1084,69 @@ const handleSaveSale = async () => {
               />
               <TextField
                 label="Patente de la Permuta"
-                value={form.tradeInPlate}
+                value={tradeVehicle.plate}
                 onChange={(e) =>
-                  setForm((prev) => ({
+                  setTradeVehicle((prev) => ({
                     ...prev,
-                    tradeInPlate: e.target.value.toUpperCase(),
+                    plate: e.target.value.toUpperCase(),
                   }))
                 }
                 fullWidth
                 sx={{ input: { color: "#fff" }, label: { color: "#ccc" } }}
               />
+              <TextField
+                select
+                label="Marca de la Permuta"
+                value={tradeBrandId}
+                onChange={(e) => {
+                  setTradeBrandId(e.target.value);
+                  setTradeModelId("");
+                  setTradeVehicle((p) => ({ ...p, versionId: "" }));
+                }}
+                fullWidth
+              >
+                {tradeBrands.map((b) => (
+                  <MenuItem key={b.id} value={String(b.id)}>{b.name}</MenuItem>
+                ))}
+              </TextField>
+              <TextField
+                select
+                label="Modelo de la Permuta"
+                value={tradeModelId}
+                onChange={(e) => {
+                  setTradeModelId(e.target.value);
+                  setTradeVehicle((p) => ({ ...p, versionId: "" }));
+                }}
+                fullWidth
+                disabled={!tradeBrandId}
+              >
+                {tradeModels.map((m) => (
+                  <MenuItem key={m.id} value={String(m.id)}>{m.name}</MenuItem>
+                ))}
+              </TextField>
+              <TextField
+                select
+                label="Versión de la Permuta"
+                value={tradeVehicle.versionId}
+                onChange={(e) => setTradeVehicle((p) => ({ ...p, versionId: e.target.value }))}
+                fullWidth
+                disabled={!tradeModelId}
+              >
+                {tradeVersions.map((v) => (
+                  <MenuItem key={v.id} value={String(v.id)}>{v.name}</MenuItem>
+                ))}
+              </TextField>
+              <TextField label="Año Permuta" type="number" value={tradeVehicle.year}
+                onChange={(e) => setTradeVehicle((p) => ({ ...p, year: e.target.value }))} fullWidth />
+              <TextField label="Kilometraje Permuta" type="number" value={tradeVehicle.kilometraje}
+                onChange={(e) => setTradeVehicle((p) => ({ ...p, kilometraje: e.target.value }))} fullWidth />
+              <TextField label="N° Motor Permuta" value={tradeVehicle.engineNumber}
+                onChange={(e) => setTradeVehicle((p) => ({ ...p, engineNumber: e.target.value }))} fullWidth />
+              <TextField label="N° Chasis Permuta" value={tradeVehicle.chassisNumber}
+                onChange={(e) => setTradeVehicle((p) => ({ ...p, chassisNumber: e.target.value }))} fullWidth />
+              <TextField label="Color Permuta" value={tradeVehicle.color}
+                onChange={(e) => setTradeVehicle((p) => ({ ...p, color: e.target.value }))} fullWidth />
+
               <TextField
                 label="Saldo (Vehículo - Permuta)"
                 value={form.balance}
@@ -1329,6 +1516,43 @@ const handleSaveSale = async () => {
           </Box>
         )}
 
+        {cashCollectedAtSale > 0 && (
+          <Paper sx={{ mt: 3, p: 2, backgroundColor: "#25253a" }}>
+            <Typography variant="h6" sx={{ color: "#fff", mb: 1 }}>
+              Cobro inicial / Tesorería GL
+            </Typography>
+            <Typography sx={{ color: "#ddd", mb: 2 }}>
+              Importe que ingresa ahora: {formatPesos(cashCollectedAtSale)}
+            </Typography>
+            {treasuryAllocations.map((a, idx) => (
+              <Box key={idx} display="grid" gridTemplateColumns="2fr 1fr 1.4fr auto" gap={1} mb={1}>
+                <TextField select label="Cuenta GL" value={a.accountId}
+                  onChange={(e) => setTreasuryAllocations((rows) => rows.map((r,i) => i===idx ? {...r, accountId:e.target.value} : r))}>
+                  {treasuryAccounts.map((acc) => (
+                    <MenuItem key={acc.id} value={String(acc.id)}>{acc.name}</MenuItem>
+                  ))}
+                </TextField>
+                <TextField label="Importe" type="number" value={a.amount}
+                  onChange={(e) => setTreasuryAllocations((rows) => rows.map((r,i) => i===idx ? {...r, amount:e.target.value} : r))} />
+                <TextField select label="Medio" value={a.paymentMethod}
+                  onChange={(e) => setTreasuryAllocations((rows) => rows.map((r,i) => i===idx ? {...r, paymentMethod:e.target.value as TreasuryPaymentMethod} : r))}>
+                  {["CASH","TRANSFER","DEBIT","CREDIT","CHECK","WALLET","OTHER"].map((m) => (
+                    <MenuItem key={m} value={m}>{m}</MenuItem>
+                  ))}
+                </TextField>
+                <Button disabled={treasuryAllocations.length===1}
+                  onClick={() => setTreasuryAllocations((rows) => rows.filter((_,i) => i!==idx))}>Quitar</Button>
+              </Box>
+            ))}
+            <Button onClick={() => setTreasuryAllocations((rows) => [...rows, {accountId:"", amount:"", paymentMethod:"TRANSFER"}])}>
+              Agregar cuenta
+            </Button>
+            <Typography sx={{ color: treasuryMismatch ? "warning.main" : "#ddd", mt: 1 }}>
+              Distribuido: {formatPesos(treasuryAllocationTotal)}
+            </Typography>
+          </Paper>
+        )}
+
         <Box mt={3} textAlign="right">
           <Button
             variant="contained"
@@ -1343,7 +1567,8 @@ const handleSaveSale = async () => {
                 missingInstallments) ||
               (isMotoPlanPayment && !form.selectedMotoPlan) ||
               kairosDataMissing ||
-              compositionMismatch
+              compositionMismatch ||
+              treasuryMismatch
             }
           >
             Previsualizar
@@ -1558,7 +1783,8 @@ const handleSaveSale = async () => {
         missingInstallments) ||
       (isMotoPlanPayment && !form.selectedMotoPlan) ||
       kairosDataMissing ||
-      compositionMismatch
+      compositionMismatch ||
+      treasuryMismatch
     }
   >
     Vender y Descargar PDF

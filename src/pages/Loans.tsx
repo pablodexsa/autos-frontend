@@ -24,6 +24,8 @@ import SearchIcon from "@mui/icons-material/Search";
 import PictureAsPdfIcon from "@mui/icons-material/PictureAsPdf";
 import AddIcon from "@mui/icons-material/Add";
 import { useSnackbar } from "notistack";
+import { treasuryApi } from "../api/treasury";
+import type { TreasuryAccount, TreasuryPaymentMethod } from "../types/treasury";
 import {
   createLoan,
   getLoanFundSummary,
@@ -74,6 +76,9 @@ export default function Loans() {
 
   const [preview, setPreview] = useState<LoanPreview | null>(null);
   const [loading, setLoading] = useState(false);
+  const [treasuryAccounts, setTreasuryAccounts] = useState<TreasuryAccount[]>([]);
+  const [treasuryAccountId, setTreasuryAccountId] = useState("");
+  const [treasuryPaymentMethod, setTreasuryPaymentMethod] = useState<TreasuryPaymentMethod>("TRANSFER");
 
   const requestedAmount = useMemo(() => {
     const raw = requestedAmountText.replace(/[^\d]/g, "");
@@ -85,7 +90,12 @@ export default function Loans() {
     requestedAmount > 0 &&
     !!requestDate &&
     weeklyInstallments >= 1 &&
-    weeklyInstallments <= 6;
+    weeklyInstallments <= 12;
+
+  useEffect(() => {
+    treasuryApi.accounts("KAIROS").then(setTreasuryAccounts).catch(() =>
+      enqueueSnackbar("No se pudieron cargar las cuentas de Tesorería", { variant: "error" }));
+  }, [enqueueSnackbar]);
 
   async function loadInitial() {
     try {
@@ -207,6 +217,11 @@ export default function Loans() {
         return;
       }
 
+      if (!treasuryAccountId) {
+        enqueueSnackbar("Seleccioná la cuenta de Kairos desde la que se entrega el préstamo", { variant: "warning" });
+        return;
+      }
+
       setLoading(true);
 
       const created = await createLoan({
@@ -214,6 +229,8 @@ export default function Loans() {
         requestedAmount,
         requestDate,
         weeklyInstallments,
+        treasuryAccountId: Number(treasuryAccountId),
+        treasuryPaymentMethod,
       });
 
       enqueueSnackbar("Préstamo generado correctamente", {
@@ -224,6 +241,7 @@ export default function Loans() {
       setRequestedAmountText("");
       setWeeklyInstallments(4);
       setRequestDate(todayIso());
+      setTreasuryAccountId("");
 
       await loadInitial();
 
@@ -351,7 +369,7 @@ export default function Loans() {
                   setPreview(null);
                 }}
               >
-                {[1, 2, 3, 4, 5, 6].map((n) => (
+                {Array.from({ length: 12 }, (_, index) => index + 1).map((n) => (
                   <MenuItem key={n} value={n}>
                     {n}
                   </MenuItem>
@@ -369,7 +387,18 @@ export default function Loans() {
               Previsualizar préstamo
             </Button>
 
-            <Button
+                      <TextField select label="Cuenta origen del desembolso" value={treasuryAccountId}
+            onChange={(e) => setTreasuryAccountId(e.target.value)} fullWidth>
+            {treasuryAccounts.map((account) => <MenuItem key={account.id} value={account.id}>{account.name}</MenuItem>)}
+          </TextField>
+          <TextField select label="Medio de entrega" value={treasuryPaymentMethod}
+            onChange={(e) => setTreasuryPaymentMethod(e.target.value as TreasuryPaymentMethod)} fullWidth>
+            <MenuItem value="TRANSFER">Transferencia</MenuItem><MenuItem value="CASH">Efectivo</MenuItem>
+            <MenuItem value="WALLET">Billetera</MenuItem><MenuItem value="CHECK">Cheque</MenuItem>
+            <MenuItem value="OTHER">Otro</MenuItem>
+          </TextField>
+
+<Button
               variant="contained"
               startIcon={<AddIcon />}
               disabled={!preview || !preview.canCreate || loading}

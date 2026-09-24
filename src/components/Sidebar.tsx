@@ -1,4 +1,4 @@
-﻿import React from "react";
+import React from "react";
 import {
   Drawer,
   List,
@@ -26,6 +26,7 @@ import { permissions } from "../permissions";
 import { useAuth } from "../context/AuthContext";
 import AccountBalanceWalletIcon from "@mui/icons-material/AccountBalanceWallet";
 import RequestQuoteIcon from "@mui/icons-material/RequestQuote";
+import ShoppingCartCheckoutIcon from "@mui/icons-material/ShoppingCartCheckout";
 
 
 const drawerWidth = 240;
@@ -52,6 +53,7 @@ const Sidebar: React.FC<SidebarProps> = ({ mobileOpen = false, handleDrawerToggl
     { text: "Dashboard Gerencial", icon: <DashboardIcon />, path: "/dashboard-gerencial", key: "dashboard_gerencial" },
     { text: "Dashboard Financiero", icon: <AccountBalanceWalletIcon />, path: "/financial-dashboard", key: "financial-dashboard" },
     { text: "Vehículos", icon: <DirectionsCarIcon />, path: "/vehicles", key: "vehicles" },
+    { text: "Compras de vehículos", icon: <ShoppingCartCheckoutIcon />, path: "/purchases", key: "purchases" },
     { text: "Clientes", icon: <PeopleIcon />, path: "/clients", key: "clients" },
     { text: "Créditos Directo", icon: <CreditScoreIcon />, path: "/directo", key: "directo" },
     { text: "Créditos Cuota Red", icon: <CreditScoreIcon />, path: "/cuotared", key: "cuotared" },

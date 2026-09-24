@@ -1,8 +1,9 @@
-﻿export const permissions = {
+export const permissions = {
   admin: [
     "home",
     "dashboard_gerencial",
     "vehicles",
+    "purchases",
     "clients",
     "budgets",
     "budget-reports",
@@ -24,6 +25,7 @@ owner: [
   "home",
   "dashboard_gerencial",
   "vehicles",
+    "purchases",
   "clients",
   "budgets",
   "budget-reports",
@@ -81,6 +83,7 @@ owner: [
   gerencia: [
     "home",
     "vehicles",
+    "purchases",
     "clients",
     "budgets",
     "budget-reports",

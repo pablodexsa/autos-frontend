@@ -22,6 +22,8 @@ import {
 } from "@mui/material";
 import PaymentsIcon from "@mui/icons-material/Payments";
 import { useSnackbar } from "notistack";
+import { treasuryApi } from "../api/treasury";
+import type { TreasuryAccount, TreasuryPaymentMethod } from "../types/treasury";
 import {
   getLoanInstallments,
   LoanInstallment,
@@ -119,7 +121,10 @@ if (installment?.status === "PARTIALLY_PAID" && installment?.lastPaymentAt) {
     return Number(base.toFixed(2));
   }
 
-  return Number((base * (1 + 0.05 * daysLate)).toFixed(2));
+  const rate =
+  	Number(installment.loan?.dailyLateInterestRate ?? 5) / 100;
+
+  return Number((base * (1 + rate * daysLate)).toFixed(2));
 }
 
 export default function LoanInstallments() {
@@ -139,6 +144,10 @@ export default function LoanInstallments() {
   const [paymentDate, setPaymentDate] = useState(todayIso());
   const [paymentCurrentAmount, setPaymentCurrentAmount] = useState(0);
   const [observations, setObservations] = useState("");
+  const [treasuryAccounts, setTreasuryAccounts] = useState<TreasuryAccount[]>([]);
+  const [treasuryAccountId, setTreasuryAccountId] = useState("");
+  const [treasuryPaymentMethod, setTreasuryPaymentMethod] = useState<TreasuryPaymentMethod>("TRANSFER");
+  const [submittingPayment, setSubmittingPayment] = useState(false);
 
   async function loadRows() {
     try {
@@ -159,6 +168,11 @@ export default function LoanInstallments() {
     loadRows();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  useEffect(() => {
+    treasuryApi.accounts("KAIROS").then(setTreasuryAccounts).catch(() =>
+      enqueueSnackbar("No se pudieron cargar las cuentas de Tesorería", { variant: "error" }));
+  }, [enqueueSnackbar]);
+
 
   useEffect(() => {
     if (!selected || !paymentDate) return;
@@ -211,6 +225,7 @@ export default function LoanInstallments() {
   }
 
   function closePayment() {
+    if (submittingPayment) return;
     setPaymentOpen(false);
     setSelected(null);
     setPaymentAmount("");
@@ -232,10 +247,14 @@ export default function LoanInstallments() {
         return;
       }
 
+      if (!treasuryAccountId) {
+        enqueueSnackbar("Seleccioná la cuenta donde ingresó el dinero", { variant: "warning" });
+        return;
+      }
+      setSubmittingPayment(true);
       await registerLoanInstallmentPayment(selected.id, {
-        amount,
-        paymentDate,
-        observations: observations.trim() || undefined,
+        amount, paymentDate, observations: observations.trim() || undefined,
+        treasuryAccountId: Number(treasuryAccountId), treasuryPaymentMethod,
       });
 
       enqueueSnackbar("Pago registrado correctamente", {
@@ -251,6 +270,8 @@ export default function LoanInstallments() {
           "Error al registrar pago",
         { variant: "error" },
       );
+    } finally {
+      setSubmittingPayment(false);
     }
   }
 
@@ -487,6 +508,18 @@ export default function LoanInstallments() {
                 onChange={(e) => setPaymentAmount(moneyInput(e.target.value))}
               />
 
+              <TextField select label="Cuenta donde ingresó el dinero" fullWidth value={treasuryAccountId}
+                onChange={(e) => setTreasuryAccountId(e.target.value)}>
+                {treasuryAccounts.map((account) => <MenuItem key={account.id} value={account.id}>{account.name}</MenuItem>)}
+              </TextField>
+              <TextField select label="Medio de pago" fullWidth value={treasuryPaymentMethod}
+                onChange={(e) => setTreasuryPaymentMethod(e.target.value as TreasuryPaymentMethod)}>
+                <MenuItem value="TRANSFER">Transferencia</MenuItem><MenuItem value="CASH">Efectivo</MenuItem>
+                <MenuItem value="WALLET">Billetera</MenuItem><MenuItem value="DEBIT">Débito</MenuItem>
+                <MenuItem value="CREDIT">Crédito</MenuItem><MenuItem value="CHECK">Cheque</MenuItem>
+                <MenuItem value="OTHER">Otro</MenuItem>
+              </TextField>
+
               <TextField
                 label="Observaciones"
                 fullWidth
@@ -500,9 +533,9 @@ export default function LoanInstallments() {
         </DialogContent>
 
         <DialogActions>
-          <Button onClick={closePayment}>Cancelar</Button>
-          <Button variant="contained" onClick={submitPayment}>
-            Registrar pago
+          <Button onClick={closePayment} disabled={submittingPayment}>Cancelar</Button>
+          <Button variant="contained" onClick={submitPayment} disabled={submittingPayment}>
+            {submittingPayment ? "Registrando..." : "Registrar pago"}
           </Button>
         </DialogActions>
       </Dialog>

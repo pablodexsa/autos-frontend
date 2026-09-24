@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Box,
   Button,
@@ -29,6 +29,8 @@ import NotificationSnackbar from "../components/NotificationSnackbar";
 import { formatDateAR } from "../utils/date";
 import "../styles/Installments.css";
 import LoadingActionButton from "../components/LoadingActionButton";
+import { treasuryApi } from "../api/treasury";
+import type { TreasuryAccount, TreasuryPaymentMethod } from "../types/treasury";
 
 type Order = "asc" | "desc";
 
@@ -59,6 +61,10 @@ const [paymentCurrentAmount, setPaymentCurrentAmount] = useState<number>(0);
 const [paymentReceiver, setPaymentReceiver] =
   useState<PaymentReceiver>("AGENCY");
 const [paymentObservations, setPaymentObservations] = useState<string>("");
+const [treasuryAccounts, setTreasuryAccounts] = useState<TreasuryAccount[]>([]);
+const [treasuryAccountId, setTreasuryAccountId] = useState<string>("");
+const [treasuryPaymentMethod, setTreasuryPaymentMethod] =
+  useState<TreasuryPaymentMethod>("TRANSFER");
 
   const [snackbarOpen, setSnackbarOpen] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState("");
@@ -107,6 +113,14 @@ const [paymentObservations, setPaymentObservations] = useState<string>("");
 
   useEffect(() => {
     fetchInstallments();
+    treasuryApi
+      .accounts("GL_MOTORS")
+      .then((accounts) => setTreasuryAccounts(accounts.filter((a) => a.isActive)))
+      .catch(() => {
+        setSnackbarSeverity("error");
+        setSnackbarMessage("No se pudieron cargar las cuentas de Tesorería GL");
+        setSnackbarOpen(true);
+      });
   }, []);
 
 useEffect(() => {
@@ -136,6 +150,8 @@ const handleOpenPayment = (installmentId: number) => {
   setPaymentCurrentAmount(currentAmount);
   setPaymentReceiver("AGENCY");
   setPaymentObservations("");
+  setTreasuryAccountId("");
+  setTreasuryPaymentMethod("TRANSFER");
   setOpenPaymentDialog(true);
 };
 
@@ -147,6 +163,8 @@ const handleClosePayment = () => {
   setPaymentCurrentAmount(0);
   setPaymentReceiver("AGENCY");
   setPaymentObservations("");
+  setTreasuryAccountId("");
+  setTreasuryPaymentMethod("TRANSFER");
 };
 
   const handleOpenReceipt = async (paymentId: number) => {
@@ -181,6 +199,13 @@ const handlePaymentSubmit = async () => {
       return;
     }
 
+    if (!treasuryAccountId) {
+      setSnackbarSeverity("warning");
+      setSnackbarMessage("Seleccioná la cuenta de GL donde ingresó el pago");
+      setSnackbarOpen(true);
+      return;
+    }
+
     setSavingPayment(true);
 
     await registerInstallmentPayment(selectedInstallmentId, {
@@ -188,6 +213,8 @@ const handlePaymentSubmit = async () => {
       paymentDate,
       receiver: paymentReceiver,
       observations: paymentObservations.trim() || undefined,
+      treasuryAccountId: Number(treasuryAccountId),
+      treasuryPaymentMethod,
     });
 
     setSnackbarSeverity("success");
@@ -778,7 +805,44 @@ const matchesStatus = filters.status
               <MenuItem value="STUDIO">Estudio</MenuItem>
             </TextField>
 
-            <TextField
+            <Grid container spacing={2} sx={{ mb: 2 }}>
+            <Grid item xs={12} md={6}>
+              <TextField
+                select
+                fullWidth
+                label="Cuenta donde ingresó el pago"
+                value={treasuryAccountId}
+                onChange={(e) => setTreasuryAccountId(e.target.value)}
+              >
+                {treasuryAccounts.map((account) => (
+                  <MenuItem key={account.id} value={account.id}>
+                    {account.name}
+                  </MenuItem>
+                ))}
+              </TextField>
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <TextField
+                select
+                fullWidth
+                label="Medio de cobro"
+                value={treasuryPaymentMethod}
+                onChange={(e) =>
+                  setTreasuryPaymentMethod(e.target.value as TreasuryPaymentMethod)
+                }
+              >
+                <MenuItem value="TRANSFER">Transferencia</MenuItem>
+                <MenuItem value="CASH">Efectivo</MenuItem>
+                <MenuItem value="WALLET">Billetera</MenuItem>
+                <MenuItem value="CHECK">Cheque</MenuItem>
+                <MenuItem value="DEBIT">Débito</MenuItem>
+                <MenuItem value="CREDIT">Crédito</MenuItem>
+                <MenuItem value="OTHER">Otro</MenuItem>
+              </TextField>
+            </Grid>
+          </Grid>
+
+          <TextField
               label="Observaciones"
               value={paymentObservations}
               onChange={(e) => setPaymentObservations(e.target.value)}

@@ -5,6 +5,7 @@ export type LoanClient = {
   firstName: string;
   lastName: string;
   cuitCuil: string;
+  phone?: string | null;
   workAddress?: string | null;
   aliasOrCbu?: string | null;
   dniPhotoPath?: string | null;
@@ -54,9 +55,11 @@ export type LoanInstallment = {
   } | null;
   loan?: {
     id: number;
+    productType: 'KAIROS_STANDARD' | 'GL_MOTORS';
     requestedAmount: number;
     totalToReturn: number;
     requestDate: string;
+    dailyLateInterestRate: number;
   } | null;
   payment?: any;
   payments?: any[];
@@ -186,6 +189,8 @@ export async function createLoan(payload: {
   requestedAmount: number;
   requestDate: string;
   weeklyInstallments: number;
+  treasuryAccountId: number;
+  treasuryPaymentMethod: string;
 }) {
   const { data } = await api.post<Loan>('/loans', payload);
   return data;
@@ -216,6 +221,8 @@ export async function registerLoanInstallmentPayment(
     amount: number;
     paymentDate: string;
     observations?: string;
+    treasuryAccountId: number;
+    treasuryPaymentMethod: string;
   },
 ) {
   const { data } = await api.patch(

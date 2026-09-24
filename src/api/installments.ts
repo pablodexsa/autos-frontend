@@ -1,4 +1,4 @@
-﻿import api from "./api";
+import api from "./api";
 import { showSuccess } from "../utils/errorHandler";
 
 export async function listInstallments() {
@@ -19,6 +19,8 @@ export async function registerInstallmentPayment(
     paymentDate: string;
     receiver: "AGENCY" | "STUDIO";
     observations?: string;
+    treasuryAccountId: number;
+    treasuryPaymentMethod: string;
   }
 ) {
   const { data } = await api.patch(
